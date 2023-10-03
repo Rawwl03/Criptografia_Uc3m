@@ -1,3 +1,4 @@
+import base64
 import json
 from User import User
 
@@ -18,16 +19,16 @@ class Json_users:
         except json.JSONDecodeError as exception:
             raise "JSON Decode Error - Wrong JSON Format" from exception
 
-    def contr_check(self, id:int, hash:str) -> bool:
-        if self._data_list[id]["hash"] == hash:
+    def contr_check(self, id:int, hash) -> bool:
+        if self._data_list[id]["hash"] == str(hash):
             return True
         return False
 
-    def buscar_user(self, user:str) -> (bool, int):
+    def buscar_user(self, user:str) -> (bool, int, int):
         for usuario in self._data_list:
             if usuario["username"] == user:
-                return True, usuario["id"]
-        return False, None
+                return True, usuario["id"], usuario["salt"]
+        return False, None, None
 
     def actualizar_json(self):
         try:
@@ -40,3 +41,6 @@ class Json_users:
         self.cargar_datos()
         self._data_list.append(usuario_reg.__dict__)
         self.actualizar_json()
+
+    def cont_ret(self, id):
+        return self._data_list[id]["hash"]
