@@ -1,5 +1,3 @@
-import base64
-import hashlib
 import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -7,14 +5,16 @@ from json_users import Json_users
 from User import User
 from freezegun import freeze_time
 from cryptography.exceptions import InvalidKey
+from Cine import Cine
 
 class Terminal:
 
     @freeze_time("2023-10-02")
     def __init__(self):
         self.database = Json_users()
+        self.cine = Cine()
 
-    def sys(self):
+    def sys_inicio(self):
         accedido = False
         while not accedido:
             print("Seleccione una opción para acceder al sistema")
@@ -29,7 +29,8 @@ class Terminal:
                 user_accedido = self.acceder()
                 if user_accedido:
                     accedido = True
-                    print("Bienvenido, " + user_accedido)
+                    print("Bienvenido a CINESA, " + user_accedido)
+                self.accion_cine(user_accedido)
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
 
@@ -81,7 +82,7 @@ class Terminal:
                     contrasena_h = input("Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 8 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
                     if contrasena_h.upper() == "EXIT":
                         return -1
-                    if self.aprobación_clave(contrasena_h):
+                    if self.aprobacion_clave(contrasena_h):
                         c_validada = True
                 contrasena_h, salt_new = self.encriptar_clave(contrasena_h)
                 contrasena_h2 = input("La clave introducida es válida. Repita la contraseña de nuevo\n")
@@ -94,7 +95,7 @@ class Terminal:
             self.database.registrar_user(new_user)
             return 0
 
-    def aprobación_clave(self, contrasena:str):
+    def aprobacion_clave(self, contrasena:str):
         if len(contrasena)<8:
             return False
         contador_mayus = 0
@@ -124,9 +125,54 @@ class Terminal:
             return False
         return True
 
+    def accion_cine(self, user_accedido):
+        salir_sys = False
+        while not salir_sys:
+            print("¿Que acción desea realizar, "+ user_accedido+"?")
+            accion = input("Cartelera || Comprar || Salir\n")
+            if accion.lower() == "cartelera":
+                print("Estas son nuestras películas disponibles:")
+                for i in range(0, len(self.cine.peliculas_disponibles)-1):
+                    print("-"+str(i+1)+"-"+self.cine.peliculas_disponibles[i].nombre+", duración -> "+str(self.cine.peliculas_disponibles[i].duracion)+" minutos")
+                info_add = False
+                bucle_info = False
+                while not bucle_info:
+                    decision = input("¿Desea ver información sobre alguna película en concreto, " + user_accedido + "? SI || NO\n")
+                    if decision.lower() == "si":
+                        peli = input("Seleccione el número de la película que quieras ver\n")
+                        try:
+                            num = int(peli)
+                            if num > 0 and num < 15:
+                                bucle_info = True
+                                info_add = True
+                            else:
+                                print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el 14 según la película de la que quieras saber más")
+                        except ValueError:
+                            print("No has introducido un numero")
+                    elif decision.lower() == "no":
+                        bucle_info = True
+                    else:
+                        print("No has seleccionado una opción correctamente, inténtelo de nuevo")
+                if info_add:
+                    print("-----"+self.cine.peliculas_disponibles[num-1].nombre+"-----\n-Duración de la película: "+str(self.cine.peliculas_disponibles[num-1].duracion)+" minutos\n-Información sobre la película: "+self.cine.peliculas_disponibles[num-1].descripcion+"\n-Horarios para ver la película " + self.cine.peliculas_disponibles[num-1].nombre + ":")
+                    self.disponibilidad_pelicula(self.cine.peliculas_disponibles[num-1])
+            elif accion.lower()=="comprar":
+                print("Hay que definir esta operacion")
+            elif accion.lower()=="salir":
+                print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
+                salir_sys = True
+            else:
+                print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
+
+    def disponibilidad_pelicula(self, pelicula):
+        for i in range(0, self.cine.num_salas):
+            dicc_horas = self.cine.salas[i].peliculas_dia.keys()
+            for clave in dicc_horas:
+                if self.cine.salas[i].peliculas_dia[clave] == pelicula.nombre:
+                    print("->Sala "+str(i+1)+"| Hora: "+clave)
 
 if __name__ == "__main__":
     term_1 = Terminal()
-    term_1.sys()
+    term_1.sys_inicio()
 
 
