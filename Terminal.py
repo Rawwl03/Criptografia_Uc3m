@@ -165,11 +165,11 @@ class Terminal:
                 print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
 
     def disponibilidad_pelicula(self, pelicula):
-        for i in range(0, self.cine.num_salas):
+        for i in range(0, len(self.cine.salas)):
             dicc_horas = self.cine.salas[i].peliculas_dia.keys()
             for clave in dicc_horas:
                 if self.cine.salas[i].peliculas_dia[clave] == pelicula.nombre:
-                    print("->Sala "+str(i+1)+"| Hora: "+clave)
+                    print("-> Sala "+str(i+1)+" | Hora: "+clave)
 
 if __name__ == "__main__":
     term_1 = Terminal()

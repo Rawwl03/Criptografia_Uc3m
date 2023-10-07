@@ -9,15 +9,12 @@ class Cine:
 
     def __init__(self):
         self.salas = []
-        self.num_salas = len(self.salas)
         self.peliculas_disponibles = self.cartelera()
         self.horario = Json_horario()
         self.generacion_cine()
-        for peli in self.salas[0].peliculas_dia:
-            print(peli)
 
     def generacion_cine(self):
-        for i in range (0,9):
+        for i in range(0,9):
             self.salas.append(Sala(i+1))
             filas = random.randint(6,15)
             asientos = random.randint(15,20)
@@ -75,8 +72,7 @@ class Cine:
         return hora_str
 
     def cargar_horario(self):
-        self.horario.cargar_datos()
-        for i in range(0, self.num_salas):
+        for i in range(0, len(self.salas)):
             for j in range(0, len(self.horario._data_list[i])):
                 self.salas[i].peliculas_dia[self.horario._data_list[i][j][0]] = self.horario._data_list[i][j][1]
 
