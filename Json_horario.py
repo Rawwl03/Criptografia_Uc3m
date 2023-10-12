@@ -3,7 +3,7 @@ import json
 class Json_horario:
 
     def __init__(self):
-        self.ruta_json = "horario_salas.json"
+        self.ruta_json = "datos/horario_salas.json"
         self._data_list = []
         self.cargar_datos()
 

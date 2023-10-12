@@ -1,10 +1,9 @@
-import base64
 import json
 from User import User
 
 class Json_users:
     def __init__(self):
-        self.ruta_json = "users_registered.json"
+        self.ruta_json = "datos/users_registered.json"
         self._data_list = []
         self.cargar_datos()
 
