@@ -1,11 +1,12 @@
 import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from json_users import Json_users
-from User import User
+from json_py.json_users import Json_users
+from users_data.User import User
 from freezegun import freeze_time
 from cryptography.exceptions import InvalidKey
-from Cine import Cine
+from cinema_structure.Cine import Cine
+from users_data.Tarjeta import Tarjeta
 
 class Terminal:
 
@@ -56,7 +57,6 @@ class Terminal:
                 while i < 3:
                     contrasena_h = input("Introduce la contraseña\n")
                     cont_store = self.database.cont_ret(id-1)
-                    prueba, salt_2 = self.encriptar_clave(contrasena_h, False, salt_user.encode('latin-1'))
                     validada = self.validate_contrs(cont_store.encode('latin-1'), contrasena_h, salt_user.encode('latin-1'))
                     if validada:
                         return username
@@ -79,7 +79,7 @@ class Terminal:
             while not registro_correcto:
                 c_validada = False
                 while not c_validada:
-                    contrasena_h = input("Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 8 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
+                    contrasena_h = input("Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 10 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
                     if contrasena_h.upper() == "EXIT":
                         return -1
                     if self.aprobacion_clave(contrasena_h):
@@ -96,7 +96,7 @@ class Terminal:
             return 0
 
     def aprobacion_clave(self, contrasena:str):
-        if len(contrasena)<8:
+        if len(contrasena)<10:
             return False
         contador_mayus = 0
         contador_nums = 0
@@ -139,23 +139,25 @@ class Terminal:
                 while not bucle_info:
                     decision = input("¿Desea ver información sobre alguna película en concreto, " + user_accedido + "? SI || NO\n")
                     if decision.lower() == "si":
-                        peli = input("Seleccione el número de la película que quieras ver\n")
-                        try:
-                            num = int(peli)
-                            if num > 0 and num < 15:
-                                bucle_info = True
-                                info_add = True
-                            else:
-                                print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el 14 según la película de la que quieras saber más")
-                        except ValueError:
-                            print("No has introducido un numero")
+                        numero_c = False
+                        while not numero_c:
+                            peli = input("Seleccione el número de la película que quieras ver\n")
+                            try:
+                                num = int(peli)
+                                if num > 0 and num < 15:
+                                    bucle_info = True
+                                    info_add = True
+                                    numero_c = True
+                                else:
+                                    print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el 14 según la película de la que quieras saber más")
+                            except ValueError:
+                                print("No has introducido un numero")
                     elif decision.lower() == "no":
                         bucle_info = True
                     else:
                         print("No has seleccionado una opción correctamente, inténtelo de nuevo")
                 if info_add:
-                    print("-----"+self.cine.peliculas_disponibles[num-1].nombre+"-----\n-Duración de la película: "+str(self.cine.peliculas_disponibles[num-1].duracion)+" minutos\n-Información sobre la película: "+self.cine.peliculas_disponibles[num-1].descripcion+"\n-Horarios para ver la película " + self.cine.peliculas_disponibles[num-1].nombre + ":")
-                    self.disponibilidad_pelicula(self.cine.peliculas_disponibles[num-1])
+                    self.mostrar_peliculas(num)
             elif accion.lower()=="comprar":
                 print("Hay que definir esta operacion")
             elif accion.lower()=="salir":
@@ -170,6 +172,13 @@ class Terminal:
             for clave in dicc_horas:
                 if self.cine.salas[i].peliculas_dia[clave] == pelicula.nombre:
                     print("-> Sala "+str(i+1)+" | Hora: "+clave)
+
+    def mostrar_peliculas(self, num):
+        print("-----" + self.cine.peliculas_disponibles[num - 1].nombre + "-----\n-Duración de la película: " + str(
+            self.cine.peliculas_disponibles[num - 1].duracion) + " minutos\n-Información sobre la película: " +
+              self.cine.peliculas_disponibles[num - 1].descripcion + "\n-Horarios para ver la película " +
+              self.cine.peliculas_disponibles[num - 1].nombre + ":")
+        self.disponibilidad_pelicula(self.cine.peliculas_disponibles[num - 1])
 
 if __name__ == "__main__":
     term_1 = Terminal()

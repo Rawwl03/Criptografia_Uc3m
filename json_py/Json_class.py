@@ -1,10 +1,9 @@
 import json
 
-class Json_horario:
-
-    def __init__(self):
-        self.ruta_json = "datos/horario_salas.json"
-        self._data_list = []
+class Json:
+    def __init__(self, ruta: str):
+        self.ruta_json = ruta
+        self.data_list = []
         self.cargar_datos()
 
     def cargar_datos(self) -> None:

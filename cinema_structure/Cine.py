@@ -1,9 +1,9 @@
 import random
-from Película import Pelicula
-from Sala import Sala
-from Fila import Fila
-from Asiento import Asiento
-from Json_horario import Json_horario
+from .Película import Pelicula
+from .Sala import Sala
+from .Fila import Fila
+from .Asiento import Asiento
+from json_py.Json_horario import Json_horario
 
 class Cine:
 
