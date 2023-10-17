@@ -9,13 +9,15 @@ from cryptography.exceptions import InvalidKey
 from cinema_structure.Cine import Cine
 from users_data.Tarjeta import Tarjeta
 from json_py.json_tarjetas import Json_tarjetas
+from json_py.Json_log import json_log
 
 class Terminal:
 
     @freeze_time("2023-10-02")
     def __init__(self):
-        self.database_users = Json_users()
-        self.database_tarjetas = Json_tarjetas()
+        self.db_users = Json_users()
+        self.db_tarjetas = Json_tarjetas()
+        self.db_log = json_log()
         self.cine = Cine()
 
     def sys_inicio(self):
@@ -44,9 +46,9 @@ class Terminal:
             username = input("Introduce tu usuario. Si quiere salir escriba EXIT\n")
             if username.upper() == "EXIT":
                 return None
-            existe = self.database_users.buscar_user(username)
-            id = self.database_users.id_ret(username)
-            salt_user = self.database_users.salt_ret(id-1)
+            existe = self.db_users.buscar_user(username)
+            id = self.db_users.id_ret(username)
+            salt_user = self.db_users.salt_ret(id - 1)
             if not existe:
                 print("Este usuario no se encuentra registrado, ¿desea probar con otro nombre?")
                 decision = input("SI || NO\n")
@@ -61,7 +63,7 @@ class Terminal:
                 i = 0
                 while i < 3:
                     contrasena_h = input("Introduce la contraseña\n")
-                    cont_store = self.database_users.cont_ret(id-1)
+                    cont_store = self.db_users.cont_ret(id - 1)
                     validada = self.validate_contrs(cont_store.encode('latin-1'), contrasena_h, salt_user.encode('latin-1'))
                     if validada:
                         return username
@@ -76,7 +78,7 @@ class Terminal:
         username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
         if username.upper() == "EXIT":
             return -1
-        existe= self.database_users.buscar_user(username)
+        existe= self.db_users.buscar_user(username)
         if existe:
             print("Este nombre de usuario ya ha sido registrado, introduzca otro")
         else:
@@ -96,8 +98,8 @@ class Terminal:
                     print("La contraseña ha sido validada")
                 else:
                     print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
-            new_user = User(username, contrasena_h.decode('latin-1'), len(self.database_users._data_list) + 1, salt_new.decode('latin-1'))
-            self.database_users.registrar_user(new_user)
+            new_user = User(username, contrasena_h.decode('latin-1'), len(self.db_users._data_list) + 1, salt_new.decode('latin-1'))
+            self.db_users.registrar_user(new_user)
             return 0
 
     def aprobacion_clave(self, contrasena:str):
@@ -229,7 +231,7 @@ class Terminal:
                         confirmacion = True
                 else:
                         print("Para continuar con la compra, introduzca SI o NO, por favor")
-        tarjetas_user = self.database_tarjetas.tarjetas_user(user_accedido)
+        tarjetas_user = self.db_tarjetas.tarjetas_user(user_accedido)
         if len(tarjetas_user) == 0:
             print("Usted no tiene tarjetas guardadas, deberá guardar una primero para realizar el pago")
             decision_tomada = False
@@ -265,7 +267,7 @@ class Terminal:
         if saldo < 8:
             return False
         else:
-            self.database_tarjetas.actualizar_saldo(saldo-8, tarjeta)
+            self.db_tarjetas.actualizar_saldo(saldo - 8, tarjeta)
             return True
 
     def disponibilidad_pelicula(self, pelicula):
@@ -290,23 +292,25 @@ class Terminal:
             print("-" + str(i + 1) + "-" + self.cine.peliculas_disponibles[i].nombre + ", duración -> " + str(self.cine.peliculas_disponibles[i].duracion) + " minutos")
 
     def cifrado_tarjeta(self, user_accedido):
-        id = self.database_users.id_ret(user_accedido)
+        id = self.db_users.id_ret(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
-        contrasena = self.database_users.cont_ret(id-1)
+        contrasena = self.db_users.cont_ret(id - 1)
         aes = AESGCM(contrasena.encode('latin-1'))
         tarj_cifr = aes.encrypt(nonce, datos.encode('latin-1'), None)
         tarjeta = Tarjeta(user_accedido, tarj_cifr.decode('latin-1'), nonce.decode('latin-1'), 30)
-        self.database_tarjetas.registrar_tarjeta(tarjeta)
+        self.db_tarjetas.registrar_tarjeta(tarjeta)
+        self.db_log.add_log_cifrado([datos, tarj_cifr.decode('latin-1')])
         print("La tarjeta es válida y ha sido guardada")
 
     def descifrar_tarj(self, tarj_guardada):
         nonce = tarj_guardada["nonce_tarj"].encode('latin-1')
         cyphertext = tarj_guardada["cifrado"].encode('latin-1')
-        id = self.database_users.id_ret(tarj_guardada["propietario"])
-        key = self.database_users.cont_ret(id-1)
+        id = self.db_users.id_ret(tarj_guardada["propietario"])
+        key = self.db_users.cont_ret(id - 1)
         aes = AESGCM(key.encode('latin-1'))
         desc = aes.decrypt(nonce, cyphertext, None)
+        self.db_log.add_log_descifrado([key, desc.decode('latin-1')])
         return desc.decode('latin-1')
 
     def datos_tarjeta(self, user_accedido):
@@ -327,6 +331,7 @@ class Terminal:
                 validacion = True
         datos = num_tarj+"-"+fecha_tarj+"-"+cvv_tarj
         return datos
+
     def validar_num_tarj(self, num_tarj):
         if len(num_tarj)!=16:
             print("El código introducido no tiene formato correcto")
@@ -371,7 +376,7 @@ class Terminal:
         return True
 
     def validar_tarjeta(self, tarjeta_input, user_accedido):
-        for tarjeta in self.database_tarjetas._data_list:
+        for tarjeta in self.db_tarjetas._data_list:
             if user_accedido == tarjeta["propietario"]:
                 descrifrado = self.descifrar_tarj(tarjeta)
                 if descrifrado == tarjeta_input:
