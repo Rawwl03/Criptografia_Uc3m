@@ -6,16 +6,11 @@ class Json_users(Json):
     def __init__(self):
         super().__init__(ruta_json)
 
-    def contr_check(self, id:int, hash) -> bool:
-        if self._data_list[id]["hash"] == str(hash):
-            return True
-        return False
-
-    def buscar_user(self, user:str) -> (bool, int, int):
+    def buscar_user(self, user:str):
         for usuario in self._data_list:
             if usuario["username"] == user:
-                return True, usuario["id"], usuario["salt"]
-        return False, None, None
+                return True
+        return False
 
     def registrar_user(self, usuario_reg):
         self.cargar_datos()
@@ -24,3 +19,11 @@ class Json_users(Json):
 
     def cont_ret(self, id):
         return self._data_list[id]["hash"]
+
+    def id_ret(self, usuario):
+        for user in self._data_list:
+            if user["username"]==usuario:
+                return user["id"]
+
+    def salt_ret(self, id):
+        return self._data_list[id]["salt"]

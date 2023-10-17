@@ -58,19 +58,6 @@ class Cine:
         peliculas.append(Pelicula("Titi me pregunto", 113, descripcion))
         return peliculas
 
-    def sumar_hora(self, duracion, hora_actual, hora_descanso):
-        hora_act = int(hora_actual[:2])
-        minuto_act = int(hora_actual[3:])
-        minuto_act += duracion
-        if minuto_act >= 60:
-            hora_act += minuto_act//60
-            minuto_act = minuto_act % 60
-        hora_act += hora_descanso
-        if minuto_act<10:
-            minuto_act = "0"+str(minuto_act)
-        hora_str = str(hora_act)+":"+str(minuto_act)
-        return hora_str
-
     def cargar_horario(self):
         for i in range(0, len(self.salas)):
             for j in range(0, len(self.horario._data_list[i])):
@@ -96,3 +83,16 @@ class Cine:
                     noche = True
         self.horario._data_list = horario
         self.horario.actualizar_json()
+
+    def sumar_hora(self, duracion, hora_actual, hora_descanso):
+        hora_act = int(hora_actual[:2])
+        minuto_act = int(hora_actual[3:])
+        minuto_act += duracion
+        if minuto_act >= 60:
+            hora_act += minuto_act//60
+            minuto_act = minuto_act % 60
+        hora_act += hora_descanso
+        if minuto_act<10:
+            minuto_act = "0"+str(minuto_act)
+        hora_str = str(hora_act)+":"+str(minuto_act)
+        return hora_str
