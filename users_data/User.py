@@ -1,7 +1,6 @@
 
 class User:
-    def __init__(self, nombre, hash, id, salt):
+    def __init__(self, nombre, hash, salt):
         self.username = nombre
         self.hash = hash
-        self.id = id
         self.salt = salt

@@ -2,23 +2,20 @@ import os
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from json_py.json_users import Json_users
 from users_data.User import User
 from freezegun import freeze_time
 from cryptography.exceptions import InvalidKey
-from cinema_structure.Cine import Cine
 from users_data.Tarjeta import Tarjeta
-from json_py.json_tarjetas import Json_tarjetas
-from json_py.Json_log import json_log
+from Database import Database
+from users_data.Entrada import Entrada
+
+contrasena_sys = ""
 
 class Terminal:
 
     @freeze_time("2023-10-02")
     def __init__(self):
-        self.db_users = Json_users()
-        self.db_tarjetas = Json_tarjetas()
-        self.db_log = json_log()
-        self.cine = Cine()
+        self.db = Database()
 
     def sys_inicio(self):
         accedido = False
@@ -35,35 +32,34 @@ class Terminal:
                 user_accedido = self.acceder()
                 if user_accedido:
                     accedido = True
-                    print("Bienvenido a CINESA, " + user_accedido)
-                self.accion_cine(user_accedido)
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
+        print("Bienvenido a CINESA, " + user_accedido)
+        self.accion_cine(user_accedido)
 
     def acceder(self):
         i = 0
         while i < 3:
             username = input("Introduce tu usuario. Si quiere salir escriba EXIT\n")
             if username.upper() == "EXIT":
-                return None
-            existe = self.db_users.buscar_user(username)
-            id = self.db_users.id_ret(username)
-            salt_user = self.db_users.salt_ret(id - 1)
-            if not existe:
+                return False
+            user = self.db.existe_user(username)
+            if len(user) == 0:
                 print("Este usuario no se encuentra registrado, ¿desea probar con otro nombre?")
                 decision = input("SI || NO\n")
                 if decision.upper() == "NO":
-                    i += 3
+                    return False
                 else:
                     i += 1
                 if i >= 3:
                     print("Saliendo del sistema")
-                    return None
+                    return False
             else:
                 i = 0
                 while i < 3:
                     contrasena_h = input("Introduce la contraseña\n")
-                    cont_store = self.db_users.cont_ret(id - 1)
+                    cont_store = user[0][1]
+                    salt_user = user[0][2]
                     validada = self.validate_contrs(cont_store.encode('latin-1'), contrasena_h, salt_user.encode('latin-1'))
                     if validada:
                         return username
@@ -71,15 +67,15 @@ class Terminal:
                         print("La contraseña es incorrecta, inténtelo de nuevo")
                         i += 1
                     if i >= 3:
-                        print("Saliendo del sistema")
-                        return None
+                        print("Saliendo del sistema de acceso")
+                        return False
 
     def registro(self):
         username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
         if username.upper() == "EXIT":
             return -1
-        existe= self.db_users.buscar_user(username)
-        if existe:
+        user = self.db.existe_user(username)
+        if len(user) != 0:
             print("Este nombre de usuario ya ha sido registrado, introduzca otro")
         else:
             registro_correcto = False
@@ -98,8 +94,8 @@ class Terminal:
                     print("La contraseña ha sido validada")
                 else:
                     print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
-            new_user = User(username, contrasena_h.decode('latin-1'), len(self.db_users._data_list) + 1, salt_new.decode('latin-1'))
-            self.db_users.registrar_user(new_user)
+            new_user = User(username, contrasena_h.decode('latin-1'), salt_new.decode('latin-1'))
+            self.db.anadir_user_registered(new_user)
             return 0
 
     def aprobacion_clave(self, contrasena:str):
@@ -144,6 +140,7 @@ class Terminal:
             elif accion.lower()=="salir":
                 print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
                 salir_sys = True
+                self.db.cerrar_base()
             else:
                 print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
 
@@ -180,6 +177,7 @@ class Terminal:
     def acc_compra(self, user_accedido):
         print("Las películas disponibles son las siguientes:")
         self.mostrar_peliculas()
+        peliculas = self.db.consultar_peliculas()
         numero_c = False
         while not numero_c:
             peli = input("Seleccione el número de la película que quieras ver. Si quiere salir, escriba EXIT\n")
@@ -189,13 +187,13 @@ class Terminal:
                 try:
                     num = int(peli)
                     if num > 0 and num < 15:
-                        peli_selec = self.cine.peliculas_disponibles[num-1]
-                        print("Horarios disponibles para la pelicula " + peli_selec.nombre)
+                        peli_selec = peliculas[num-1]
+                        print("Horarios disponibles para la pelicula " + peli_selec[0])
                         entradas = self.disponibilidad_pelicula(peli_selec)
                         if len(entradas)>0:
                             numero_c = True
                         else:
-                            print("No hay entradas disponibles para la película "+peli_selec.nombre)
+                            print("No hay entradas disponibles para la película "+peli_selec[0])
                     else:
                         print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el 14 según la película de la que quieras saber más")
                 except ValueError:
@@ -217,21 +215,23 @@ class Terminal:
                             seleccion = True
                     except ValueError:
                         print("No has introducido un valor correcto")
+            print("-Entrada seleccionada-\nPelícula: " + peli_selec[0] + "\nSala: " + str(entradas[id-1][0]) + "\nHora: " + entradas[id-1][1])
             while not confirmacion:
-                print("-Entrada seleccionada-\nPelícula: " + peli_selec.nombre + "\nSala: " + str(entradas[id-1][1]) + "\nHora: " + entradas[id-1][2])
                 ent_correcta = input("¿Desea comprar esta entrada? SI||NO\n")
                 if ent_correcta.upper() == "SI":
-                        print("El precio de la entrada son 8€, se procederá al pago con tarjeta")
-                        ent_comprada = True
-                        confirmacion = True
+                        seleccion_check, asiento = self.seleccion_asiento(entradas[id-1])
+                        if seleccion_check:
+                            print("El precio de la entrada son 8€, se procederá al pago con tarjeta")
+                            ent_comprada = True
+                            confirmacion = True
                 elif ent_correcta.upper() == "NO":
-                        print("Horarios disponibles para la pelicula " + peli_selec.nombre)
+                        print("Horarios disponibles para la pelicula " + peli_selec[0])
                         self.disponibilidad_pelicula(peli_selec)
                         seleccion = False
                         confirmacion = True
                 else:
                         print("Para continuar con la compra, introduzca SI o NO, por favor")
-        tarjetas_user = self.db_tarjetas.tarjetas_user(user_accedido)
+        tarjetas_user = self.db.select_tarjetas(user_accedido)
         if len(tarjetas_user) == 0:
             print("Usted no tiene tarjetas guardadas, deberá guardar una primero para realizar el pago")
             decision_tomada = False
@@ -258,59 +258,80 @@ class Terminal:
                         print("Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
                     else:
                         pago = True
+                        entrada = Entrada(user_accedido, peli_selec[0], entradas[id-1][2], entradas[id-1][1], )
+                else:
+                    print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
             else:
                 return 0
-        print("El pago de 8€ para la entrada de la película "+ peli_selec.nombre+" ha sido realizado, gracias por su compra "+user_accedido)
+        print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido realizado, gracias por su compra "+user_accedido)
 
     def pago(self, tarjeta):
-        saldo = int(tarjeta["saldo"])
+        saldo = tarjeta[3]
         if saldo < 8:
             return False
         else:
-            self.db_tarjetas.actualizar_saldo(saldo - 8, tarjeta)
+            self.db.actualizar_saldo(tarjeta, saldo - 8)
             return True
 
-    def disponibilidad_pelicula(self, pelicula):
-        entradas = []
-        for i in range(0, len(self.cine.salas)):
-            dicc_horas = self.cine.salas[i].peliculas_dia.keys()
-            for clave in dicc_horas:
-                if self.cine.salas[i].peliculas_dia[clave] == pelicula.nombre:
-                    print("-> Sala "+str(i+1)+" | Hora: "+clave)
-                    entradas.append((pelicula.nombre, i+1, clave))
-        return entradas
-
     def info_pelicula(self, num):
-        print("-----" + self.cine.peliculas_disponibles[num - 1].nombre + "-----\n-Duración de la película: " + str(
-            self.cine.peliculas_disponibles[num - 1].duracion) + " minutos\n-Información sobre la película: " +
-              self.cine.peliculas_disponibles[num - 1].descripcion + "\n-Horarios para ver la película " +
-              self.cine.peliculas_disponibles[num - 1].nombre + ":")
-        self.disponibilidad_pelicula(self.cine.peliculas_disponibles[num - 1])
+        peliculas = self.db.consultar_peliculas()
+        print("-----" + peliculas[num - 1][0] + "-----\n-Duración de la película: " + str(
+            peliculas[num - 1][1]) + " minutos\n-Información sobre la película: " +
+              peliculas[num - 1][2] + "\n-Horarios para ver la película " +
+              peliculas[num - 1][0] + ":")
+        self.disponibilidad_pelicula(peliculas[num - 1])
+
+    def disponibilidad_pelicula(self, pelicula):
+        entradas_posibles = self.db.horarios_peli(pelicula)
+        for entrada in entradas_posibles:
+                print("-> Sala "+str(entrada[0])+" | Hora: "+entrada[1])
+        return entradas_posibles
 
     def mostrar_peliculas(self):
-        for i in range(0, len(self.cine.peliculas_disponibles) - 1):
-            print("-" + str(i + 1) + "-" + self.cine.peliculas_disponibles[i].nombre + ", duración -> " + str(self.cine.peliculas_disponibles[i].duracion) + " minutos")
+        peliculas = self.db.consultar_peliculas()
+        for i in range(0, len(peliculas) - 1):
+            print("-" + str(i + 1) + "-" + peliculas[i][0] + ", duración -> " + str(peliculas[i][1]) + " minutos")
+
+    def seleccion_asiento(self, entrada_selec):
+        print("Estos son todos los asientos disponibles para la película '"+ entrada_selec[2]+"' a las "+entrada_selec[1])
+        print("\t---Sala " + str(entrada_selec[0]) + "---")
+        asientos_dispo = self.db.asientos_disponibles(entrada_selec)
+        for asiento in asientos_dispo:
+            print("-> Fila "+asiento[1]+", Asiento "+asiento[0])
+        seleccionado = False
+        while not seleccionado:
+            sel = input("Introduzca el asiento que desees en el formato Fila/Asiento. Si desea salir, escriba EXIT\n")
+            if sel.upper() == "EXIT":
+                return 0
+            datos_asiento = sel.split('/')
+            if len(datos_asiento) == 1:
+                print("No has introducido el asiento deseado en el formato correcto")
+            else:
+                for asiento in asientos_dispo:
+                    if asiento[1] == datos_asiento[0] and asiento[0] == datos_asiento[1]:
+                        return datos_asiento
+                print("No se ha encontrado dicha entrada, seleccione una disponible")
+
 
     def cifrado_tarjeta(self, user_accedido):
-        id = self.db_users.id_ret(user_accedido)
+        user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
-        contrasena = self.db_users.cont_ret(id - 1)
-        aes = AESGCM(contrasena.encode('latin-1'))
+        aes = AESGCM(user[1].encode('latin-1'))
         tarj_cifr = aes.encrypt(nonce, datos.encode('latin-1'), None)
         tarjeta = Tarjeta(user_accedido, tarj_cifr.decode('latin-1'), nonce.decode('latin-1'), 30)
-        self.db_tarjetas.registrar_tarjeta(tarjeta)
-        self.db_log.add_log_cifrado([datos, tarj_cifr.decode('latin-1')])
+        self.db.anadir_tarjeta(tarjeta)
+        self.db.anadir_log(["Cifrado", user[0], datos, tarj_cifr.decode('latin-1')])
         print("La tarjeta es válida y ha sido guardada")
 
     def descifrar_tarj(self, tarj_guardada):
-        nonce = tarj_guardada["nonce_tarj"].encode('latin-1')
-        cyphertext = tarj_guardada["cifrado"].encode('latin-1')
-        id = self.db_users.id_ret(tarj_guardada["propietario"])
-        key = self.db_users.cont_ret(id - 1)
+        user = self.db.existe_user(tarj_guardada[0])
+        nonce = tarj_guardada[2].encode('latin-1')
+        cyphertext = tarj_guardada[1].encode('latin-1')
+        key = user[1]
         aes = AESGCM(key.encode('latin-1'))
         desc = aes.decrypt(nonce, cyphertext, None)
-        self.db_log.add_log_descifrado([key, desc.decode('latin-1')])
+        self.db.anadir_log(["Descifrado", user[0], key, desc.decode('latin-1')])
         return desc.decode('latin-1')
 
     def datos_tarjeta(self, user_accedido):
@@ -376,8 +397,9 @@ class Terminal:
         return True
 
     def validar_tarjeta(self, tarjeta_input, user_accedido):
-        for tarjeta in self.db_tarjetas._data_list:
-            if user_accedido == tarjeta["propietario"]:
+        tarjetas = self.db.select_tarjetas(user_accedido)
+        for tarjeta in tarjetas:
+            if user_accedido == tarjeta[0]:
                 descrifrado = self.descifrar_tarj(tarjeta)
                 if descrifrado == tarjeta_input:
                     return tarjeta

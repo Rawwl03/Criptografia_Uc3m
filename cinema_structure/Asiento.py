@@ -1,6 +1,7 @@
 
 class Asiento:
 
-    def __init__(self, numero):
-        self.estado = "libre"
+    def __init__(self, numero, fila, sala):
         self.numero = numero
+        self.fila = fila
+        self.sala = sala

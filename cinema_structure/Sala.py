@@ -1,10 +1,8 @@
 
 class Sala:
 
-    def __init__(self, id):
+    def __init__(self, id, num_filas):
         self.numero = id
-        self.filas = []
-        self.peliculas_dia = {}
-        self.num_filas = len(self.filas)
+        self.num_filas = num_filas
 
 
