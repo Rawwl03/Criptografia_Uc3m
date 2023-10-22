@@ -131,11 +131,13 @@ class Terminal:
         salir_sys = False
         while not salir_sys:
             print("¿Que acción desea realizar, "+ user_accedido+"?")
-            accion = input("Cartelera || Comprar || Salir\n")
+            accion = input("Cartelera || Comprar || Perfil || Salir\n")
             if accion.lower() == "cartelera":
                 self.acc_cartelera(user_accedido)
             elif accion.lower()=="comprar":
                 self.acc_compra(user_accedido)
+            elif accion.lower()=="perfil":
+                self.acc_perfil(user_accedido)
             elif accion.lower()=="salir":
                 print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
                 salir_sys = True
@@ -248,49 +250,67 @@ class Terminal:
                     print("Porfavor, escriba la decisión que desees tomar correctamente")
         pago = False
         while not pago:
-            acc_tarj = input("¿Qué quiere acción quiere realizar con las tarjetas? Guardar||Seleccionar||Borrar||EXIT\n")
+            acc_tarj = input("¿Qué quiere acción quiere realizar con las tarjetas? Guardar || Seleccionar || Borrar || EXIT\n")
             if acc_tarj.upper() == "GUARDAR":
                 self.cifrado_tarjeta(user_accedido)
             elif acc_tarj.upper() == "SELECCIONAR":
-                tarjeta_input = self.datos_tarjeta(user_accedido)
-                tarjeta_db = self.validar_tarjeta(tarjeta_input, user_accedido)
+                tarjeta_db = self.validar_tarjeta(user_accedido)
                 if tarjeta_db:
                     pago_finished = self.pago(tarjeta_db)
                     if not pago_finished:
                         print("Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
                     else:
                         pago = True
-                        entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[0], asiento[1], user_accedido)
+                        entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[1], asiento[0], user_accedido)
                         self.db.anadir_entrada(entrada)
                 else:
                     print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
             elif acc_tarj.upper() == "BORRAR":
-                print("Tus tarjetas son las siguientes:")
-                tarjetas = self.db.select_tarjetas(user_accedido)
-                for i in range(0, len(tarjetas)):
-                    desc = self.descifrar_tarj(tarjetas[i])
-                    digits = desc[12:16]
-                    fecha_cad = desc[17:23]
-                    print("|"+str(i+1)+"| ->Tarjeta terminada en ************"+digits+", con fecha de caducidad en "+fecha_cad)
-                borrado = False
-                while not borrado:
-                    selec = input("¿Que tarjeta desea eliminar? Indique el número en el que aparece la tarjeta a borrar. Si desea salir, escriba EXIT\n")
-                    if selec.upper() == "EXIT":
-                        return 0
-                    try:
-                        id = int(selec)
-                        if id > len(tarjetas) or id < 1:
-                            print("Has seleccionado un numero fuera del rango de tus tarjetas, por favor, introdúzcalo correctamente")
+                tarjetas = self.mostrar_tarjetas(user_accedido)
+                if len(tarjetas)>0:
+                    borrado = False
+                    while not borrado:
+                        selec = self.borrar_tarjeta(tarjetas)
+                        if not selec:
+                            return 0
                         else:
-                            self.db.borrar_tarjeta(tarjetas[id-1])
                             borrado = True
-                    except ValueError:
-                        print("No has introducido un valor correcto")
-                print("Tarjeta borrada correctamente de la base de datos")
-
-            else:
+                    print("Tarjeta borrada correctamente de la base de datos")
+            elif acc_tarj.upper() == "EXIT":
                 return 0
+            else:
+                print("Introduzca una operación válida")
         print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido realizado, gracias por su compra "+user_accedido)
+
+    def acc_perfil(self, user_accedido):
+        accion = False
+        while not accion:
+            print("¿Que acción deseas realizar en tu perfil?")
+            acc = input("Guardar (tarjeta) || Borrar (tarjeta) || Cambiar (contraseña) || Entradas || Tarjetas || EXIT\n")
+            if acc.lower() == "guardar":
+                self.cifrado_tarjeta(user_accedido)
+            elif acc.lower() == "borrar":
+                tarjetas = self.mostrar_tarjetas(user_accedido)
+                if len(tarjetas)>0:
+                    borrado = False
+                    while not borrado:
+                        selec = self.borrar_tarjeta(tarjetas)
+                        if not selec:
+                            return 0
+                        else:
+                            borrado = True
+                    print("La tarjeta ha sido borrada con éxito")
+            elif acc.lower() == "cambiar":
+                print("Hay que definir el cambio de contraseña")
+            elif acc.lower() == "entradas":
+                self.mostrar_entradas(user_accedido)
+            elif acc.lower() == "tarjetas":
+                self.mostrar_tarjetas(user_accedido)
+            elif acc.lower() == "exit":
+                return 0
+            else:
+                print("Acción introducida no válida")
+
 
     def pago(self, tarjeta):
         saldo = tarjeta[3]
@@ -329,14 +349,14 @@ class Terminal:
         while not seleccionado:
             sel = input("Introduzca el asiento que desees en el formato Fila/Asiento. Si desea salir, escriba EXIT\n")
             if sel.upper() == "EXIT":
-                return 0, None
+                return False, None
             datos_asiento = sel.split('/')
             if len(datos_asiento) == 1:
                 print("No has introducido el asiento deseado en el formato correcto")
             else:
                 for asiento in asientos_dispo:
                     if int(asiento[1]) == int(datos_asiento[0]) and int(asiento[0]) == int(datos_asiento[1]):
-                        return datos_asiento
+                        return True, asiento
                 print("No se ha encontrado dicha entrada, seleccione una disponible")
 
 
@@ -423,15 +443,65 @@ class Terminal:
                 return False
         return True
 
-    def validar_tarjeta(self, tarjeta_input, user_accedido):
-        tarjetas = self.db.select_tarjetas(user_accedido)
-        for tarjeta in tarjetas:
-            if user_accedido == tarjeta[0]:
-                descrifrado = self.descifrar_tarj(tarjeta)
-                if descrifrado == tarjeta_input:
-                    return tarjeta
-        return None
+    def validar_tarjeta(self, user_accedido):
+        tarjetas = self.mostrar_tarjetas(user_accedido)
+        if len(tarjetas) > 0:
+            seleccion = False
+            while not seleccion:
+                num = input("Seleccione la tarjeta que desea utilizar escribiendo el orden en el que aparece\n")
+                if num.upper() == "EXIT":
+                    return False
+                try:
+                    id = int(num)
+                    if id > len(tarjetas) or id < 1:
+                        print(
+                            "Has seleccionado un numero fuera del rango de tus tarjetas, por favor, introdúzcalo correctamente")
+                    else:
+                        desc = self.descifrar_tarj(tarjetas[id-1])
+                        cvv = desc[25:]
+                        cvv_inp = input("Introduzca el cvv de la tarjeta correspondiente\n")
+                        if cvv == cvv_inp:
+                            return tarjetas[id-1]
+                        else:
+                            print("El cvv introducido no corresponde con el de la tarjeta")
+                except ValueError:
+                    print("No has introducido un valor correcto")
 
+    def borrar_tarjeta(self, tarjetas):
+        selec = input(
+            "¿Que tarjeta desea eliminar? Indique el número en el que aparece la tarjeta a borrar. Si desea salir, escriba EXIT\n")
+        if selec.upper() == "EXIT":
+            return False
+        try:
+            id = int(selec)
+            if id > len(tarjetas) or id < 1:
+                print(
+                    "Has seleccionado un numero fuera del rango de tus tarjetas, por favor, introdúzcalo correctamente")
+            else:
+                self.db.borrar_tarjeta(tarjetas[id - 1])
+                return True
+        except ValueError:
+            print("No has introducido un valor correcto")
+
+    def mostrar_tarjetas(self, user_accedido):
+        tarjetas = self.db.select_tarjetas(user_accedido)
+        if len(tarjetas) == 0:
+            print("No hay tarjetas guardadas")
+        else:
+            print("Tus tarjetas son las siguientes:")
+            for i in range(0, len(tarjetas)):
+                desc = self.descifrar_tarj(tarjetas[i])
+                digits = desc[12:16]
+                fecha_cad = desc[17:24]
+                print("|" + str(
+                    i + 1) + "| ->Tarjeta terminada en ************" + digits + ", con fecha de caducidad en " + fecha_cad)
+        return tarjetas
+
+    def mostrar_entradas(self, user_accedido):
+        entradas = self.db.entradas_compradas(user_accedido)
+        print(user_accedido+", ha comprado un total de "+str(len(entradas))+" entradas. Tus entradas son las siguientes:")
+        for i in range(0, len(entradas)):
+            print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][0]+", Hora: "+entradas[i][1]+", Sala: "+str(entradas[i][2])+", Fila: "+str(entradas[i][3])+", Asiento: "+str(entradas[i][4]))
 
 if __name__ == "__main__":
     term_1 = Terminal()

@@ -194,6 +194,12 @@ class Database:
         horarios_peli_selec = self.puntero.fetchall()
         return horarios_peli_selec
 
+    def entradas_compradas(self, user_accedido):
+        query = "SELECT * FROM ENTRADAS WHERE Cliente = ?"
+        self.puntero.execute(query, (user_accedido,))
+        entradas = self.puntero.fetchall()
+        return entradas
+
     def asientos_disponibles(self, entrada_selec):
         asientos_dispo = []
         query = "SELECT * FROM ENTRADAS WHERE Sala = '"+str(entrada_selec[0])+"' AND Hora = '"+entrada_selec[1]+"' AND Pelicula = '"+entrada_selec[2]+"'"
