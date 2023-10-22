@@ -1,4 +1,4 @@
-import os
+import os, base64
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -8,7 +8,6 @@ from cryptography.exceptions import InvalidKey
 from users_data.Tarjeta import Tarjeta
 from Database import Database
 from users_data.Entrada import Entrada
-
 contrasena_sys = ""
 
 class Terminal:
@@ -58,9 +57,9 @@ class Terminal:
                 i = 0
                 while i < 3:
                     contrasena_h = input("Introduce la contraseña\n")
-                    cont_store = user[0][1]
-                    salt_user = user[0][2]
-                    validada = self.validate_contrs(cont_store.encode('latin-1'), contrasena_h, salt_user.encode('latin-1'))
+                    cont_store = base64.b64decode(user[0][1])
+                    salt_user = base64.b64decode(user[0][2])
+                    validada = self.validate_contrs(cont_store, contrasena_h, salt_user)
                     if validada:
                         return username
                     else:
@@ -94,7 +93,7 @@ class Terminal:
                     print("La contraseña ha sido validada")
                 else:
                     print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
-            new_user = User(username, contrasena_h.decode('latin-1'), salt_new.decode('latin-1'))
+            new_user = User(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
             self.db.anadir_user_registered(new_user)
             return 0
 
@@ -215,12 +214,15 @@ class Terminal:
                             seleccion = True
                     except ValueError:
                         print("No has introducido un valor correcto")
-            print("-Entrada seleccionada-\nPelícula: " + peli_selec[0] + "\nSala: " + str(entradas[id-1][0]) + "\nHora: " + entradas[id-1][1])
             while not confirmacion:
+                print("-Entrada seleccionada-\nPelícula: " + peli_selec[0] + "\nSala: " + str(entradas[id-1][0]) + "\nHora: " + entradas[id-1][1])
                 ent_correcta = input("¿Desea comprar esta entrada? SI||NO\n")
                 if ent_correcta.upper() == "SI":
                         seleccion_check, asiento = self.seleccion_asiento(entradas[id-1])
-                        if seleccion_check:
+                        if seleccion_check == 0:
+                            print("Horarios disponibles para la pelicula " + peli_selec[0])
+                            entradas = self.disponibilidad_pelicula(peli_selec)
+                        elif seleccion_check:
                             print("El precio de la entrada son 8€, se procederá al pago con tarjeta")
                             ent_comprada = True
                             confirmacion = True
@@ -246,7 +248,7 @@ class Terminal:
                     print("Porfavor, escriba la decisión que desees tomar correctamente")
         pago = False
         while not pago:
-            acc_tarj = input("¿Qué quiere acción quiere realizar con las tarjetas? Guardar||Seleccionar||EXIT\n")
+            acc_tarj = input("¿Qué quiere acción quiere realizar con las tarjetas? Guardar||Seleccionar||Borrar||EXIT\n")
             if acc_tarj.upper() == "GUARDAR":
                 self.cifrado_tarjeta(user_accedido)
             elif acc_tarj.upper() == "SELECCIONAR":
@@ -258,9 +260,34 @@ class Terminal:
                         print("Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
                     else:
                         pago = True
-                        entrada = Entrada(user_accedido, peli_selec[0], entradas[id-1][2], entradas[id-1][1], )
+                        entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[0], asiento[1], user_accedido)
+                        self.db.anadir_entrada(entrada)
                 else:
                     print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
+            elif acc_tarj.upper() == "BORRAR":
+                print("Tus tarjetas son las siguientes:")
+                tarjetas = self.db.select_tarjetas(user_accedido)
+                for i in range(0, len(tarjetas)):
+                    desc = self.descifrar_tarj(tarjetas[i])
+                    digits = desc[12:16]
+                    fecha_cad = desc[17:23]
+                    print("|"+str(i+1)+"| ->Tarjeta terminada en ************"+digits+", con fecha de caducidad en "+fecha_cad)
+                borrado = False
+                while not borrado:
+                    selec = input("¿Que tarjeta desea eliminar? Indique el número en el que aparece la tarjeta a borrar. Si desea salir, escriba EXIT\n")
+                    if selec.upper() == "EXIT":
+                        return 0
+                    try:
+                        id = int(selec)
+                        if id > len(tarjetas) or id < 1:
+                            print("Has seleccionado un numero fuera del rango de tus tarjetas, por favor, introdúzcalo correctamente")
+                        else:
+                            self.db.borrar_tarjeta(tarjetas[id-1])
+                            borrado = True
+                    except ValueError:
+                        print("No has introducido un valor correcto")
+                print("Tarjeta borrada correctamente de la base de datos")
+
             else:
                 return 0
         print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido realizado, gracias por su compra "+user_accedido)
@@ -270,7 +297,7 @@ class Terminal:
         if saldo < 8:
             return False
         else:
-            self.db.actualizar_saldo(tarjeta, saldo - 8)
+            self.db.actualizar_saldo(tarjeta[1], saldo - 8)
             return True
 
     def info_pelicula(self, num):
@@ -297,18 +324,18 @@ class Terminal:
         print("\t---Sala " + str(entrada_selec[0]) + "---")
         asientos_dispo = self.db.asientos_disponibles(entrada_selec)
         for asiento in asientos_dispo:
-            print("-> Fila "+asiento[1]+", Asiento "+asiento[0])
+            print("-> Fila "+str(asiento[1])+", Asiento "+str(asiento[0]))
         seleccionado = False
         while not seleccionado:
             sel = input("Introduzca el asiento que desees en el formato Fila/Asiento. Si desea salir, escriba EXIT\n")
             if sel.upper() == "EXIT":
-                return 0
+                return 0, None
             datos_asiento = sel.split('/')
             if len(datos_asiento) == 1:
                 print("No has introducido el asiento deseado en el formato correcto")
             else:
                 for asiento in asientos_dispo:
-                    if asiento[1] == datos_asiento[0] and asiento[0] == datos_asiento[1]:
+                    if int(asiento[1]) == int(datos_asiento[0]) and int(asiento[0]) == int(datos_asiento[1]):
                         return datos_asiento
                 print("No se ha encontrado dicha entrada, seleccione una disponible")
 
@@ -317,22 +344,22 @@ class Terminal:
         user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
-        aes = AESGCM(user[1].encode('latin-1'))
-        tarj_cifr = aes.encrypt(nonce, datos.encode('latin-1'), None)
-        tarjeta = Tarjeta(user_accedido, tarj_cifr.decode('latin-1'), nonce.decode('latin-1'), 30)
+        aes = AESGCM(base64.b64decode(user[0][1]))
+        tarj_cifr = aes.encrypt(nonce, datos.encode(), None)
+        tarjeta = Tarjeta(user_accedido, base64.b64encode(tarj_cifr), base64.b64encode(nonce), 30)
         self.db.anadir_tarjeta(tarjeta)
-        self.db.anadir_log(["Cifrado", user[0], datos, tarj_cifr.decode('latin-1')])
+        self.db.anadir_log(["Cifrado", user[0][0], datos, base64.b64encode(tarj_cifr)])
         print("La tarjeta es válida y ha sido guardada")
 
     def descifrar_tarj(self, tarj_guardada):
         user = self.db.existe_user(tarj_guardada[0])
-        nonce = tarj_guardada[2].encode('latin-1')
-        cyphertext = tarj_guardada[1].encode('latin-1')
-        key = user[1]
-        aes = AESGCM(key.encode('latin-1'))
+        nonce = base64.b64decode(tarj_guardada[2])
+        cyphertext = base64.b64decode(tarj_guardada[1])
+        key = base64.b64decode(user[0][1])
+        aes = AESGCM(key)
         desc = aes.decrypt(nonce, cyphertext, None)
-        self.db.anadir_log(["Descifrado", user[0], key, desc.decode('latin-1')])
-        return desc.decode('latin-1')
+        self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext)])
+        return desc.decode()
 
     def datos_tarjeta(self, user_accedido):
         validacion = False

@@ -18,12 +18,12 @@ class Database:
 
         creacion_base_entradas = "CREATE TABLE ENTRADAS (Pelicula VARCHAR2, Hora CHAR(5), Sala INT(1), Fila INT(2), Asiento INT(3), Cliente VARCHAR2 NOT NULL, PRIMARY KEY(Pelicula, Hora, Sala, Fila, Asiento), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
                                  "FOREIGN KEY(Asiento) REFERENCES ASIENTOS(Asiento), FOREIGN KEY(Fila) REFERENCES FILAS(Fila), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))  "
-        creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado VARCHAR2, Nonce_tarjeta VARCHAR2 NOT NULL," \
+        creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado BLOB, Nonce_tarjeta BLOB NOT NULL," \
                                  " Saldo INT(3) NOT NULL, PRIMARY KEY(Cifrado), FOREIGN KEY (Propietario) REFERENCES USERS_REGISTERED(Username))"
-        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña VARCHAR2 NOT NULL, Salt VARCHAR2 NOT NULL," \
+        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL," \
                                  " PRIMARY KEY(Username))"
-        creacion_base_log ="CREATE TABLE LOG_CIFRADO_SIM (Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
-                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Result VARCHAR2 NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username))"
+        creacion_base_log ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
+                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
         creacion_base_horario = "CREATE TABLE HORARIO (Sala INT(2), Hora CHAR(2) NOT NULL, Pelicula VARCHAR2, PRIMARY KEY(" \
                                 "Sala, Hora, Pelicula), FOREIGN KEY (Pelicula) REFERENCES CARTELERA(Pelicula), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))"
         creacion_base_peliculas = "CREATE TABLE CARTELERA (Pelicula VARCHAR2, Duracion INT(3) NOT NULL, " \
@@ -51,51 +51,50 @@ class Database:
         self.base.commit()
 
     def anadir_entrada(self, entrada):
-        query = "INSERT INTO ENTRADAS (Pelicula, Hora, Sala, Fila, Asiento, Cliente) VALUES ('"+entrada[0]+"', '"+entrada[1]+"', '"+entrada[2]+"', '"+entrada[3]+"', '"+entrada[4]+"', '"+entrada[5]+"')"
-        self.puntero.execute(query)
+        query = "INSERT INTO ENTRADAS (Pelicula, Hora, Sala, Fila, Asiento, Cliente) VALUES (?,?,?,?,?,?)"
+        self.puntero.execute(query, (entrada.pelicula, entrada.hora, entrada.sala, entrada.fila, entrada.asiento, entrada.cliente))
         self.base.commit()
 
     def anadir_tarjeta(self, tarjeta):
-        query = "INSERT INTO TARJETAS (Propietario, Cifrado, Nonce_tarjeta, Saldo) VALUES ('"+tarjeta.propietario+"', '"+tarjeta.cifrado+"', '"+tarjeta.nonce_tarj+"', "+str(tarjeta.saldo)+")"
-        self.puntero.execute(query)
+        query = "INSERT INTO TARJETAS (Propietario, Cifrado, Nonce_tarjeta, Saldo) VALUES (?,?,?,?)"
+        self.puntero.execute(query, (tarjeta.propietario, tarjeta.cifrado, tarjeta.nonce_tarj, tarjeta.saldo))
         self.base.commit()
 
     def anadir_user_registered(self, user):
-        query = "INSERT INTO USERS_REGISTERED (Username, Hash_contraseña, Salt) VALUES ('"+user.username+"', '"+user.hash+"', '"+user.salt+"')"
-        self.puntero.execute(query)
+        query = "INSERT INTO USERS_REGISTERED (Username, Hash_contraseña, Salt) VALUES (?,?,?)"
+        self.puntero.execute(query, (user.username, user.hash, user.salt))
         self.base.commit()
 
     def anadir_log(self, datos):
-        t = datetime.now()
-        hora_str = str(t.hour) +":"+str(t.minute)
-        fecha_str = str(t.day) +"/"+str(t.month)+"/"+str(t.year)
-        query = "INSERT INTO LOG_CIFRADO_SIM (Tipo, Hora, Fecha, Usuario, Data, Result) VALUES ('"+datos[0]+"', '"+hora_str+"', '"+fecha_str+"', '"+datos[1]+"', '"+datos[2]+"', '"+datos[3]+"')"
-        self.puntero.execute(query)
+        id = self.numero_logs() + 1
+        hora_str, fecha_str = self.hora_fecha_actual()
+        query = "INSERT INTO LOG_CIFRADO_SIM (ID, Tipo, Hora, Fecha, Usuario, Data, Cypher) VALUES (?,?,?,?,?,?,?)"
+        self.puntero.execute(query, (id, datos[0], hora_str, fecha_str, datos[1], datos[2], datos[3]))
         self.base.commit()
 
     def anadir_horario(self, h_pelicula):
-        query = "INSERT INTO HORARIO (Sala, Hora, Pelicula) VALUES ("+str(h_pelicula.sala)+", '"+h_pelicula.hora+"', '"+h_pelicula.pelicula+"')"
-        self.puntero.execute(query)
+        query = "INSERT INTO HORARIO (Sala, Hora, Pelicula) VALUES (?,?,?)"
+        self.puntero.execute(query, (h_pelicula.sala, h_pelicula.hora, h_pelicula.pelicula))
         self.base.commit()
 
     def anadir_pelicula(self, pelicula):
-        query = "INSERT INTO CARTELERA (Pelicula, Duracion, Descripción) VALUES ('"+pelicula.nombre+"', "+str(pelicula.duracion)+", '"+pelicula.descripcion+"')"
-        self.puntero.execute(query)
+        query = "INSERT INTO CARTELERA (Pelicula, Duracion, Descripción) VALUES (?,?,?)"
+        self.puntero.execute(query, (pelicula.nombre, pelicula.duracion, pelicula.descripcion))
         self.base.commit()
 
     def anadir_sala(self, sala):
-        query = "INSERT INTO SALAS (Sala, Num_filas) VALUES ("+str(sala.numero)+", "+str(sala.num_filas)+")"
-        self.puntero.execute(query)
+        query = "INSERT INTO SALAS (Sala, Num_filas) VALUES (?,?)"
+        self.puntero.execute(query, (sala.numero, sala.num_filas))
         self.base.commit()
 
     def anadir_fila(self, fila):
-        query = "INSERT INTO FILAS (Fila, Sala, Num_asientos) VALUES ("+str(fila.orden)+", "+str(fila.sala)+", "+str(fila.num_asientos)+")"
-        self.puntero.execute(query)
+        query = "INSERT INTO FILAS (Fila, Sala, Num_asientos) VALUES (?,?,?)"
+        self.puntero.execute(query, (fila.orden, fila.sala, fila.num_asientos))
         self.base.commit()
 
     def anadir_asiento(self, asiento):
-        query = "INSERT INTO ASIENTOS (Asiento, Fila, Sala) VALUES ("+str(asiento.numero)+", "+str(asiento.fila)+", "+str(asiento.sala)+")"
-        self.puntero.execute(query)
+        query = "INSERT INTO ASIENTOS (Asiento, Fila, Sala) VALUES (?,?,?)"
+        self.puntero.execute(query, (asiento.numero, asiento.fila, asiento.sala))
         self.base.commit()
 
     def generar_cartelera(self):
@@ -196,28 +195,73 @@ class Database:
         return horarios_peli_selec
 
     def asientos_disponibles(self, entrada_selec):
-        query = "SELECT * FROM (ASIENTOS MINUS (SELECT Asiento, Fila, Sala FROM (ENTRADA JOIN ASIENTOS USING(Sala, Fila, Asiento)" \
-                "WHERE Sala = '"+str(entrada_selec[0])+"' AND Pelicula = '"+entrada_selec[2]+"' AND Hora = '"+entrada_selec[1]+"')))"
+        asientos_dispo = []
+        query = "SELECT * FROM ENTRADAS WHERE Sala = '"+str(entrada_selec[0])+"' AND Hora = '"+entrada_selec[1]+"' AND Pelicula = '"+entrada_selec[2]+"'"
+        self.puntero.execute(query)
+        entradas = self.puntero.fetchall()
+        query = "SELECT * FROM ASIENTOS WHERE Sala = '"+str(entrada_selec[0])+"'"
         self.puntero.execute(query)
         asientos = self.puntero.fetchall()
-        return asientos
+        for asiento in asientos:
+            asiento_aparece = False
+            for entrada in entradas:
+                if asiento[0] == entrada[4] and asiento[1] == entrada[3]:
+                    asiento_aparece = True
+            if not asiento_aparece:
+                asientos_dispo.append(asiento)
+        return asientos_dispo
 
     def actualizar_saldo(self, tarjeta, saldo_nuevo):
-        query = "UPDATE TARJETAS SET Saldo = "+str(saldo_nuevo)+"WHERE Cifrado = '"+tarjeta.cifrado+"'"
-        self.puntero.execute(query)
+        query = "UPDATE TARJETAS SET Saldo = ? WHERE Cifrado = ?"
+        self.puntero.execute(query, (saldo_nuevo, tarjeta))
         self.base.commit()
+
+    def borrar_tarjeta(self, tarjeta):
+        query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
+        self.puntero.execute(query, (tarjeta[1],))
+        self.base.commit()
+
+    def hora_fecha_actual(self):
+        t = datetime.now()
+        if len(str(t.hour)) == 1:
+            if len(str(t.minute)) == 1:
+                hora_str = "0"+str(t.hour)+":0"+str(t.minute)
+            else:
+                hora_str = "0"+str(t.hour)+":"+str(t.minute)
+        else:
+            if len(str(t.minute)) == 1:
+                hora_str = str(t.hour)+":0"+str(t.minute)
+            else:
+                hora_str = str(t.hour)+":"+str(t.minute)
+        if len(str(t.day)) == 1:
+            if len(str(t.month)) == 1:
+                fecha_str = "0"+str(t.day)+"-0"+str(t.month)+"-0"+str(t.year)
+            else:
+                fecha_str = "0"+str(t.day)+"-"+str(t.month)+"-0"+str(t.year)
+        else:
+            if len(str(t.month)) == 1:
+                fecha_str = str(t.day)+":0"+str(t.month)+":"+str(t.year)
+            else:
+                fecha_str = str(t.day)+"-"+str(t.month)+"-"+str(t.year)
+        return hora_str, fecha_str
+
+    def numero_logs(self):
+        query = "SELECT * FROM LOG_CIFRADO_SIM"
+        self.puntero.execute(query)
+        logs = self.puntero.fetchall()
+        return len(logs)
 
 
 
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
-        query = "UPDATE USERS_REGISTERED SET Hash_contraseña = '"+hash_nuevo+"' AND Salt = '"+salt_nuevo+"' WHERE Username = '"+user[0]+"'"
-        self.puntero.execute(query)
+        query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ? AND Salt = ? WHERE Username = ?"
+        self.puntero.execute(query, (hash_nuevo, salt_nuevo, user[0]))
         self.base.commit()
 
     def actualizar_tarjeta(self, tarjeta, cifrado_nuevo, nonce_nuevo):
-        query = "DELETE FROM TARJETAS WHERE Cifrado = '"+tarjeta[1]
-        self.puntero.execute(query)
+        query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
+        self.puntero.execute(query, (tarjeta[1]))
         tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, tarjeta[3])
         self.anadir_tarjeta(tarjeta_nueva)
 
