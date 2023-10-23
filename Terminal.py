@@ -10,12 +10,17 @@ from Database import Database
 from users_data.Entrada import Entrada
 contrasena_sys = ""
 
+
+"Clase en la que se ejecutan todas las operaciones necesarias para el funcionamiento"
 class Terminal:
 
     @freeze_time("2023-10-02")
     def __init__(self):
         self.db = Database()
 
+    """Función de inicio de la terminal. Tendrás que registrarte (crear user que no este ya registrado y escribir contraseña válida)
+    o acceder con una cuenta existente (escribir usuario y contraseña respectivos). Una vez accedido, se pasa a acc_cine, 
+    pasando el user que ha accedido como parámetro"""
     def sys_inicio(self):
         accedido = False
         while not accedido:
@@ -36,6 +41,10 @@ class Terminal:
         print("Bienvenido a CINESA, " + user_accedido)
         self.accion_cine(user_accedido)
 
+    """Esta función valida los datos introducidos y los comprueba con los existentes en la base de datos, para así permitir
+    el acceso al sistema con ese perfil. La contraseña introducida será cifrada y validada con la existente en la base de datos.
+    Si todo ha ido correctamente, se devolverá a sys_inicio el usuario que ha accedido. Si no, significa que el usuario ha decidido
+    salir de la fase de registro."""
     def acceder(self):
         i = 0
         while i < 3:
@@ -69,6 +78,9 @@ class Terminal:
                         print("Saliendo del sistema de acceso")
                         return False
 
+    """Función encargada de la fase de registro de usuarios. Se encargar de recibir datos correctos, cifrar la contraseña dada,
+     y guardar los datos necesarios en la base de datos para que este usuario pueda acceder posteriormente al sistema. Si todo 
+     funciona correctamente, devolverá 0. Si no, significa que el usuario ha decidido salir de la fase de registro."""
     def registro(self):
         username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
         if username.upper() == "EXIT":
@@ -97,6 +109,8 @@ class Terminal:
             self.db.anadir_user_registered(new_user)
             return 0
 
+    """Valida la contraseña introducida como input en el registro de usuario. Características de validación:
+     Mínimo 10 caracteres, al menos un número y al menos una mayúscula."""
     def aprobacion_clave(self, contrasena:str):
         if len(contrasena)<10:
             return False
@@ -111,6 +125,9 @@ class Terminal:
             return True
         return False
 
+    """Se encarga de encriptar la clave mediante un str introducido (contraseña en input). Va a ser encriptada mediante la función 
+    PBKDF2HMAC, que usará el algoritmo SHA256 y un salt introducido, realizará 30000 iteraciones y devuelve un hash de 32 bytes.
+    La función devuelve el hash obtenido y el salt utilizado"""
     def encriptar_clave(self, clave:str, new=True, salt=None):
         if new:
             salt = os.urandom(16)
@@ -118,6 +135,9 @@ class Terminal:
         key = kdf.derive(clave.encode())
         return key, salt
 
+    """Se encargar de comprobar que la contraseña input de acceso es igual a la contraseña almacenada (hash). Utiliza la misma función
+    de derivación que para cifrar, con el salt de la contraseña guardada para que pueda dar el mismo resultado. La función kdf.verify necesita dos parámetros de tipo bytes,
+    cifra contr_str (input, pero hay que transformar en bytes) y lo compara con contr_hash. Si no son iguales, salatará un error de tipo InvalidKey. Devuelve True si son iguales."""
     def validate_contrs(self, contr_hash, contr_str, salt):
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=30000)
         try:
@@ -127,6 +147,8 @@ class Terminal:
             return False
         return True
 
+    """Continuación de sys_inicio tras el acceso de user_accedido, aquí se pretende registrar la acción solicitada entre las 
+    disponibles y proceder a realizar esa operación. Hay 4 definidas."""
     def accion_cine(self, user_accedido):
         salir_sys = False
         while not salir_sys:
@@ -145,6 +167,8 @@ class Terminal:
             else:
                 print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
 
+    """La función se encarga de mostrar las películas que hay disponibles para ver, y además puede mostrar inforación adicional
+    sobre la película deseada en cuanto a sus horarios disponibles o información adicional."""
     def acc_cartelera(self, user_accedido):
         print("Estas son nuestras películas disponibles:")
         self.mostrar_peliculas()
@@ -175,7 +199,11 @@ class Terminal:
         if info_add:
             self.info_pelicula(num)
 
+    """En esta función se lleva a cabo el proceso de compra de entradas. Sigue el siguiente proceso: selección de película deseada
+    (y muestra disponibles), selección de asiento deseado (y muestra disponibles), menú tarjeta (guardar, seleccionar y borrar),
+    selección de tarjeta y pago de la entrada. Se guarda la entrada seleccionada en la base de datos."""
     def acc_compra(self, user_accedido):
+        #Se muestran y se selecciona la película deseada"
         print("Las películas disponibles son las siguientes:")
         self.mostrar_peliculas()
         peliculas = self.db.consultar_peliculas()
@@ -199,6 +227,7 @@ class Terminal:
                         print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el 14 según la película de la que quieras saber más")
                 except ValueError:
                     print("No has introducido un numero")
+        #Se procede a la selección de horario para la película que se desea ver
         ent_comprada = False
         seleccion = False
         while not ent_comprada:
@@ -220,6 +249,7 @@ class Terminal:
                 print("-Entrada seleccionada-\nPelícula: " + peli_selec[0] + "\nSala: " + str(entradas[id-1][0]) + "\nHora: " + entradas[id-1][1])
                 ent_correcta = input("¿Desea comprar esta entrada? SI||NO\n")
                 if ent_correcta.upper() == "SI":
+                        #Se procede a la selección de asiento, que devuelve si se ha seleccionado uno y el asiento seleccionado
                         seleccion_check, asiento = self.seleccion_asiento(entradas[id-1])
                         if seleccion_check == 0:
                             print("Horarios disponibles para la pelicula " + peli_selec[0])
@@ -236,6 +266,7 @@ class Terminal:
                 else:
                         print("Para continuar con la compra, introduzca SI o NO, por favor")
         tarjetas_user = self.db.select_tarjetas(user_accedido)
+        #Caso en el que el usuario no tiene tarjetas guardadas, se necesita al menos una para realizar el pago
         if len(tarjetas_user) == 0:
             print("Usted no tiene tarjetas guardadas, deberá guardar una primero para realizar el pago")
             decision_tomada = False
@@ -248,6 +279,7 @@ class Terminal:
                     return 0
                 else:
                     print("Porfavor, escriba la decisión que desees tomar correctamente")
+        #Selección de tarjeta (o guardar una, o borrarla), realización del pago y guardar tarjeta en la base de datos
         pago = False
         while not pago:
             acc_tarj = input("¿Qué quiere acción quiere realizar con las tarjetas? Guardar || Seleccionar || Borrar || EXIT\n")
@@ -282,6 +314,7 @@ class Terminal:
                 print("Introduzca una operación válida")
         print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido realizado, gracias por su compra "+user_accedido)
 
+    """Función que tiene la gestión del perfil de user_accedido. Se pueden realizar 6 acciones."""
     def acc_perfil(self, user_accedido):
         accion = False
         while not accion:
@@ -295,9 +328,9 @@ class Terminal:
                     borrado = False
                     while not borrado:
                         selec = self.borrar_tarjeta(tarjetas)
-                        if not selec:
+                        if selec == "EXIT":
                             return 0
-                        else:
+                        elif selec:
                             borrado = True
                     print("La tarjeta ha sido borrada con éxito")
             elif acc.lower() == "cambiar":
@@ -311,7 +344,8 @@ class Terminal:
             else:
                 print("Acción introducida no válida")
 
-
+    """Recibe una tarjeta, que es la seleccionada como método de pago, y se realiza el pago restándole  8 al saldo de la tarjeta seleccionada.
+    Si no tiene saldo, no se realiza el pago y se devuelve False. Si se realiza, se devuelve True."""
     def pago(self, tarjeta):
         saldo = tarjeta[3]
         if saldo < 8:
@@ -320,6 +354,8 @@ class Terminal:
             self.db.actualizar_saldo(tarjeta[1], saldo - 8)
             return True
 
+    """Recibe un número, que se corresponde con la película seleccionada para ver más inforamción. Esta información se imprime
+    en la terminal (Duración, Descripción, Horarios disponibles)"""
     def info_pelicula(self, num):
         peliculas = self.db.consultar_peliculas()
         print("-----" + peliculas[num - 1][0] + "-----\n-Duración de la película: " + str(
@@ -328,17 +364,24 @@ class Terminal:
               peliculas[num - 1][0] + ":")
         self.disponibilidad_pelicula(peliculas[num - 1])
 
+    """Tras recibir como parámetro una película, se muestran los horarios disponibles de esa película en cada sala y hora. 
+    Devuelve todas las entradas_posibles para en acc_compra poder seleccionar el horario que se desee."""
     def disponibilidad_pelicula(self, pelicula):
         entradas_posibles = self.db.horarios_peli(pelicula)
         for entrada in entradas_posibles:
                 print("-> Sala "+str(entrada[0])+" | Hora: "+entrada[1])
         return entradas_posibles
 
+    """Obtiene todas las películas disponibles que existen en la base de datos y las muestra junto a la duración de cada una"""
     def mostrar_peliculas(self):
         peliculas = self.db.consultar_peliculas()
         for i in range(0, len(peliculas) - 1):
             print("-" + str(i + 1) + "-" + peliculas[i][0] + ", duración -> " + str(peliculas[i][1]) + " minutos")
 
+    """Recibe la entrada_selec, que corresponde a un horario de una película seleccionado en acc_compra. Muestra los asientos disponibles
+    para ese horario (busca en la base de datos), es decir, los asientos que no han sido cogidos en ninguna entrada, y luego se 
+    selecciona un asiento de los mostrados y se devuelve True y el asiento si todo ha ido correctamente. Se devuelve False y None
+    si el usuario desea salir del menú de selección de asiento."""
     def seleccion_asiento(self, entrada_selec):
         print("Estos son todos los asientos disponibles para la película '"+ entrada_selec[2]+"' a las "+entrada_selec[1])
         print("\t---Sala " + str(entrada_selec[0]) + "---")
@@ -359,7 +402,10 @@ class Terminal:
                         return True, asiento
                 print("No se ha encontrado dicha entrada, seleccione una disponible")
 
-
+    """Esta función se encarga de recibir una tarjeta por input, cifrarla para el user_accedido y guardarla en la base de datos.
+    Genera un nonce para cada tarjeta, recibe los datos que serán cifrados (Numtarjeta/fcaducidad/cvv) a través de la función datos_tarjeta
+    , cifra los datos mediante el algoritmo AESGCM con la contraseña del usuario (hash), y por último guarda la tarjeta y un log en la
+    base de datos indicando que se ha producido un proceso de cifrado. Se produce cifrado simétrico autenticado."""
     def cifrado_tarjeta(self, user_accedido):
         user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
@@ -371,6 +417,9 @@ class Terminal:
         self.db.anadir_log(["Cifrado", user[0][0], datos, base64.b64encode(tarj_cifr)])
         print("La tarjeta es válida y ha sido guardada")
 
+    """Con la tarj_guardada que recibe, que se corresponde con una tarjeta del usuario, se obtiene el nonce de la tarjeta y, usando
+    el mismo algotirmo simétrico autenticado que en el cifrado de tarjetas, se descifran los datos de la tarjeta. Se añade un log de
+    descifrado, y se devuelven los datos descifrados para compararlos"""
     def descifrar_tarj(self, tarj_guardada):
         user = self.db.existe_user(tarj_guardada[0])
         nonce = base64.b64decode(tarj_guardada[2])
@@ -381,6 +430,7 @@ class Terminal:
         self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext)])
         return desc.decode()
 
+    """Función que va a obtener los datos de la tarjeta y lo que devuelve son esos datos recibidos por input juntos"""
     def datos_tarjeta(self, user_accedido):
         validacion = False
         while not validacion:
@@ -400,6 +450,7 @@ class Terminal:
         datos = num_tarj+"-"+fecha_tarj+"-"+cvv_tarj
         return datos
 
+    """Se encarga de validar el número de la tarjeta introducido en input. Tiene que tener longitud de 16 dígitos, y ser numérico"""
     def validar_num_tarj(self, num_tarj):
         if len(num_tarj)!=16:
             print("El código introducido no tiene formato correcto")
@@ -410,6 +461,8 @@ class Terminal:
                 return False
         return True
 
+    """Se encarga de validar la fecha de caducidad de la tarjeta introducida en un input. Tiene que tener longitud = 7, tener una /, y antes 
+    de la barra tiene que haber 2 dígitos que representan al mes (entre 01 y 12) y después 4 dígitos representando el año (desde 2023 hasta 2031)"""
     def validar_fecha_tarj(self, fecha_tarj):
         if len(fecha_tarj)!=7:
             print("El código introducido no tiene formato correcto")
@@ -433,6 +486,7 @@ class Terminal:
             return False
         return True
 
+    """Se encarga de validar el cvv de la tarjeta introducida por parámetro. Tiene que tener longitud = 3, y sus dígitos tienen que ser números."""
     def validar_cvv_tarj(self, cvv_tarj):
         if len(cvv_tarj) != 3:
             print("El código introducido no tiene formato correcto")
@@ -443,6 +497,9 @@ class Terminal:
                 return False
         return True
 
+    """Primero muestra las tarjetas que posee el user_accedido. Si el user_accedido no tiene tarjetas registradas, no se hará nada.
+     Si no, luego, recibe la tarjeta seleccionada (orden), descifra esa tarjeta para coger su cvv, y si el cvv introducido corresponde 
+     con el cvv de la tarjeta se devuelve la tarjeta seleccionada. Si se escribe exit, devuelve False"""
     def validar_tarjeta(self, user_accedido):
         tarjetas = self.mostrar_tarjetas(user_accedido)
         if len(tarjetas) > 0:
@@ -467,11 +524,12 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un valor correcto")
 
+    """Esta función borra una tarjeta entre todas las tarjetas del usuario. La tarjeta a borrar se especifica a través de un input"""
     def borrar_tarjeta(self, tarjetas):
         selec = input(
             "¿Que tarjeta desea eliminar? Indique el número en el que aparece la tarjeta a borrar. Si desea salir, escriba EXIT\n")
         if selec.upper() == "EXIT":
-            return False
+            return "EXIT"
         try:
             id = int(selec)
             if id > len(tarjetas) or id < 1:
@@ -483,6 +541,9 @@ class Terminal:
         except ValueError:
             print("No has introducido un valor correcto")
 
+
+    """Muestra las tarjetas una a una del usuario de las tarjetas registradas en la base de datos. Aparecerán en orden de como están
+    registradas, cada una se descifrará, y se mostrarán los últimos 4 dígitos del número de la tarjeta además de la fecha de caducidad."""
     def mostrar_tarjetas(self, user_accedido):
         tarjetas = self.db.select_tarjetas(user_accedido)
         if len(tarjetas) == 0:
@@ -497,6 +558,8 @@ class Terminal:
                     i + 1) + "| ->Tarjeta terminada en ************" + digits + ", con fecha de caducidad en " + fecha_cad)
         return tarjetas
 
+    """Selecciona las entradas que ha comprado user_accedido, y las muestra, imprimiendo en la terminal los datos de la entrada
+    y cuantas entradas ha comprado el usuario en total"""
     def mostrar_entradas(self, user_accedido):
         entradas = self.db.entradas_compradas(user_accedido)
         print(user_accedido+", ha comprado un total de "+str(len(entradas))+" entradas. Tus entradas son las siguientes:")

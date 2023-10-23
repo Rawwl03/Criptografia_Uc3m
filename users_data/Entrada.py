@@ -1,5 +1,4 @@
 
-
 class Entrada:
 
     def __init__(self, pelicula, hora, sala, fila, asiento, cliente):

@@ -14,6 +14,7 @@ class Database:
         self.puntero = self.base.cursor()
         #self.generar_base()
 
+    """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
 
         creacion_base_entradas = "CREATE TABLE ENTRADAS (Pelicula VARCHAR2, Hora CHAR(5), Sala INT(1), Fila INT(2), Asiento INT(3), Cliente VARCHAR2 NOT NULL, PRIMARY KEY(Pelicula, Hora, Sala, Fila, Asiento), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
@@ -50,6 +51,7 @@ class Database:
 
         self.base.commit()
 
+    """Métodos para añadir elementos a la base de datos en su respectiva tabla, con el formato de la tabla"""
     def anadir_entrada(self, entrada):
         query = "INSERT INTO ENTRADAS (Pelicula, Hora, Sala, Fila, Asiento, Cliente) VALUES (?,?,?,?,?,?)"
         self.puntero.execute(query, (entrada.pelicula, entrada.hora, entrada.sala, entrada.fila, entrada.asiento, entrada.cliente))
@@ -97,6 +99,7 @@ class Database:
         self.puntero.execute(query, (asiento.numero, asiento.fila, asiento.sala))
         self.base.commit()
 
+    """Método para la generación de las películas disponibles para ver"""
     def generar_cartelera(self):
         descripcion = ""
         self.anadir_pelicula(Pelicula("Abre jaime", 185, descripcion))
@@ -129,7 +132,8 @@ class Database:
         descripcion = ""
         self.anadir_pelicula(Pelicula("Titi me pregunto", 113, descripcion))
 
-
+    """Método para generar las salas y la estructura de cada una (filas y asientos). El número de filas y asientos será aleatorio
+    para cada sala entre ciertos valores"""
     def generar_asientos(self):
         for i in range(0,9):
             filas = random.randint(6,15)
@@ -140,6 +144,8 @@ class Database:
                 for k in range(0, asientos):
                     self.anadir_asiento(Asiento(k+1, j+1, i+1))
 
+    """Método para generar el horario disponible de cada sala y peli, seleccionando las horas mediante una hora de inicio y
+    la duración de la película que va a estar en dicha hora (y una hora de descanso)"""
     def generar_horario(self):
         horas_comienzo = ["10:45", "11:00", "11:15", "11:30"]
         hora_fin = 23
@@ -170,36 +176,52 @@ class Database:
         hora_str = str(hora_act) + ":" + str(minuto_act)
         return hora_str
 
+    """------------------CONSULTAS------------------"""
+
+    """Consultas todas las películas disponibles"""
     def consultar_peliculas(self):
         query = "SELECT * FROM CARTELERA"
         self.puntero.execute(query)
         peliculas = self.puntero.fetchall()
         return peliculas
 
+    """Consulta que devuelve un usuario y sus datos si este está registrado en la base de datos"""
     def existe_user(self, username):
         query = "SELECT * FROM USERS_REGISTERED WHERE Username = '"+username+"'"
         self.puntero.execute(query)
         user = self.puntero.fetchall()
         return user
 
+    """Consulta que devuelve el número de logs que hay en la base de datos"""
+    def numero_logs(self):
+        query = "SELECT * FROM LOG_CIFRADO_SIM"
+        self.puntero.execute(query)
+        logs = self.puntero.fetchall()
+        return len(logs)
+
+    """Consulta que devuelve las tarjetas que tiene un usuario"""
     def select_tarjetas(self, username):
         query = "SELECT * FROM TARJETAS WHERE Propietario = '"+username+"'"
         self.puntero.execute(query)
         tarjetas = self.puntero.fetchall()
         return tarjetas
 
+    """Consulta que devuelve los horarios disponibles para una película en concreto"""
     def horarios_peli(self, pelicula):
         query = "SELECT * FROM HORARIO WHERE Pelicula = '"+pelicula[0]+"'"
         self.puntero.execute(query)
         horarios_peli_selec = self.puntero.fetchall()
         return horarios_peli_selec
 
+    """Consulta que devuelve las entradas compradas por un cliente"""
     def entradas_compradas(self, user_accedido):
         query = "SELECT * FROM ENTRADAS WHERE Cliente = ?"
         self.puntero.execute(query, (user_accedido,))
         entradas = self.puntero.fetchall()
         return entradas
 
+    """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
+    Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""
     def asientos_disponibles(self, entrada_selec):
         asientos_dispo = []
         query = "SELECT * FROM ENTRADAS WHERE Sala = '"+str(entrada_selec[0])+"' AND Hora = '"+entrada_selec[1]+"' AND Pelicula = '"+entrada_selec[2]+"'"
@@ -217,16 +239,7 @@ class Database:
                 asientos_dispo.append(asiento)
         return asientos_dispo
 
-    def actualizar_saldo(self, tarjeta, saldo_nuevo):
-        query = "UPDATE TARJETAS SET Saldo = ? WHERE Cifrado = ?"
-        self.puntero.execute(query, (saldo_nuevo, tarjeta))
-        self.base.commit()
-
-    def borrar_tarjeta(self, tarjeta):
-        query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
-        self.puntero.execute(query, (tarjeta[1],))
-        self.base.commit()
-
+    """Método que devuelve la fecha y hora actual en el formato deseado"""
     def hora_fecha_actual(self):
         t = datetime.now()
         if len(str(t.hour)) == 1:
@@ -251,11 +264,17 @@ class Database:
                 fecha_str = str(t.day)+"-"+str(t.month)+"-"+str(t.year)
         return hora_str, fecha_str
 
-    def numero_logs(self):
-        query = "SELECT * FROM LOG_CIFRADO_SIM"
-        self.puntero.execute(query)
-        logs = self.puntero.fetchall()
-        return len(logs)
+    """Actualización del saldo por saldo_nuevo en una tarjeta en concreto"""
+    def actualizar_saldo(self, tarjeta, saldo_nuevo):
+        query = "UPDATE TARJETAS SET Saldo = ? WHERE Cifrado = ?"
+        self.puntero.execute(query, (saldo_nuevo, tarjeta))
+        self.base.commit()
+
+    """Borrado de tarjeta en concreto introducida por parámetro"""
+    def borrar_tarjeta(self, tarjeta):
+        query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
+        self.puntero.execute(query, (tarjeta[1],))
+        self.base.commit()
 
 
 
