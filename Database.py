@@ -12,7 +12,7 @@ class Database:
     def __init__(self):
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
-        #self.generar_base()
+        self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
@@ -280,8 +280,10 @@ class Database:
 
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
-        query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ? AND Salt = ? WHERE Username = ?"
-        self.puntero.execute(query, (hash_nuevo, salt_nuevo, user[0]))
+        query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ?, Salt = ? WHERE Username = ?"
+        print(hash_nuevo)
+        print(salt_nuevo)
+        self.puntero.execute(query, (hash_nuevo, salt_nuevo, user))
         self.base.commit()
 
     def actualizar_tarjeta(self, tarjeta, cifrado_nuevo, nonce_nuevo, salt_nuevo):

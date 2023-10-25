@@ -51,6 +51,7 @@ class Terminal:
     Si todo ha ido correctamente, se devolverá a sys_inicio el usuario que ha accedido. Si no, significa que el usuario ha decidido
     salir de la fase de registro."""
     def acceder(self):
+        global contrasena_sys
         i = 0
         while i < 3:
             username = input("Introduce tu usuario. Si quiere salir escriba EXIT\n")
@@ -550,9 +551,11 @@ class Terminal:
 
     """Metodo que permite actualizar el salt y el hash de la contraseña de un usuario. 
     También actualiza el cifrado de las tarjetas cuando cambiar_tarjetas=True"""
-    def rotacion_claves(self,username,cambiar_tarjetas=False):
+    def rotacion_claves(self, username, cambiar_tarjetas=False):
+        global contrasena_sys
         contrasena_h, salt_new = self.encriptar_clave(contrasena_sys)
-        self.db.actualizar_contrasena(username,base64.b64encode(contrasena_h),base64.b64encode(salt_new))
+        print(contrasena_h)
+        self.db.actualizar_contrasena(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
         if cambiar_tarjetas:
             tarjetas_usuario=self.db.select_tarjetas(username)
             if len(tarjetas_usuario) > 0:
