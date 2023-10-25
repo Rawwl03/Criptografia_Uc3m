@@ -341,7 +341,7 @@ class Terminal:
                             borrado = True
                     print("La tarjeta ha sido borrada con éxito")
             elif acc.lower() == "cambiar":
-                print("Hay que definir el cambio de contraseña")
+                self.cambiar_contrasena(user_accedido)
             elif acc.lower() == "entradas":
                 self.mostrar_entradas(user_accedido)
             elif acc.lower() == "tarjetas":
@@ -350,6 +350,21 @@ class Terminal:
                 return 0
             else:
                 print("Acción introducida no válida")
+
+    def cambiar_contrasena(self,user_accedido):
+        global contrasena_sys
+        new_pass_validada = False
+        while not new_pass_validada:
+            new_pass = input(
+                "Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 10 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
+            if new_pass.upper() == "EXIT":
+                return 0
+            if self.aprobacion_clave(new_pass):
+                new_pass_validada = True
+        contrasena_antigua = contrasena_sys
+        contrasena_sys = new_pass
+        self.rotacion_claves(user_accedido,True,contrasena_antigua)
+
 
     """Recibe una tarjeta, que es la seleccionada como método de pago, y se realiza el pago restándole  8 al saldo de la tarjeta seleccionada.
     Si no tiene saldo, no se realiza el pago y se devuelve False. Si se realiza, se devuelve True."""
@@ -428,11 +443,14 @@ class Terminal:
     """Con la tarj_guardada que recibe, que se corresponde con una tarjeta del usuario, se obtiene el nonce de la tarjeta y, usando
     el mismo algotirmo simétrico autenticado que en el cifrado de tarjetas, se descifran los datos de la tarjeta. Se añade un log de
     descifrado, y se devuelven los datos descifrados para compararlos"""
-    def descifrar_tarj(self, tarj_guardada):
+    def descifrar_tarj(self, tarj_guardada, selected_key=None):
         user = self.db.existe_user(tarj_guardada[0])
         nonce = base64.b64decode(tarj_guardada[2])
         cyphertext = base64.b64decode(tarj_guardada[1])
-        key, salt = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
+        if selected_key:
+            key, salt = self.encriptar_clave(selected_key, False, base64.b64decode(tarj_guardada[3]))
+        else:
+            key, salt = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
         aes = AESGCM(key)
         desc = aes.decrypt(nonce, cyphertext, None)
         self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext)])
@@ -551,10 +569,9 @@ class Terminal:
 
     """Metodo que permite actualizar el salt y el hash de la contraseña de un usuario. 
     También actualiza el cifrado de las tarjetas cuando cambiar_tarjetas=True"""
-    def rotacion_claves(self, username, cambiar_tarjetas=False):
+    def rotacion_claves(self, username, cambiar_tarjetas=False, old_password=None):
         global contrasena_sys
         contrasena_h, salt_new = self.encriptar_clave(contrasena_sys)
-        print(contrasena_h)
         self.db.actualizar_contrasena(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
         if cambiar_tarjetas:
             tarjetas_usuario=self.db.select_tarjetas(username)
@@ -562,7 +579,7 @@ class Terminal:
                 for tarjeta in tarjetas_usuario:
                     saldo=tarjeta[4]
                     nonce = base64.b64decode(tarjeta[2])
-                    datos_desc_tarjeta=self.descifrar_tarj(tarjeta)
+                    datos_desc_tarjeta=self.descifrar_tarj(tarjeta,old_password)
                     """Se vuelve a generar un nuevo hash de la contraseña con un nuevo salt"""
                     key, salt_used = self.encriptar_clave(contrasena_sys)
                     aes = AESGCM(key)
