@@ -39,6 +39,8 @@ class Terminal:
                 user_accedido = self.acceder()
                 if user_accedido:
                     accedido = True
+                    """El salt y el hash de la contraseña del usuario rotan cada vez que el usuario accede al sistema"""
+                    self.rotacion_claves(user_accedido)
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
         print("Bienvenido a CINESA, " + user_accedido)
@@ -546,6 +548,27 @@ class Terminal:
         except ValueError:
             print("No has introducido un valor correcto")
 
+    """Metodo que permite actualizar el salt y el hash de la contraseña de un usuario. 
+    También actualiza el cifrado de las tarjetas cuando cambiar_tarjetas=True"""
+    def rotacion_claves(self,username,cambiar_tarjetas=False):
+        contrasena_h, salt_new = self.encriptar_clave(contrasena_sys)
+        self.db.actualizar_contrasena(username,base64.b64encode(contrasena_h),base64.b64encode(salt_new))
+        if cambiar_tarjetas:
+            tarjetas_usuario=self.db.select_tarjetas(username)
+            if len(tarjetas_usuario) > 0:
+                for tarjeta in tarjetas_usuario:
+                    saldo=tarjeta[4]
+                    nonce = base64.b64decode(tarjeta[2])
+                    datos_desc_tarjeta=self.descifrar_tarj(tarjeta)
+                    """Se vuelve a generar un nuevo hash de la contraseña con un nuevo salt"""
+                    key, salt_used = self.encriptar_clave(contrasena_sys)
+                    aes = AESGCM(key)
+                    tarj_cifr = aes.encrypt(nonce, datos_desc_tarjeta.encode(), None)
+                    """Se borra el regitro actual de la tarjeta de la base de datos y se añade uno nuevo actualizado con el nuevo salt y el nuevo cifrado de la tarjeta"""
+                    self.db.borrar_tarjeta(tarjeta)
+                    tarjeta_actualizada = Tarjeta(username, base64.b64encode(tarj_cifr), base64.b64encode(nonce),
+                                      base64.b64encode(salt_used), saldo)
+                    self.db.anadir_tarjeta(tarjeta_actualizada)
 
     """Muestra las tarjetas una a una del usuario de las tarjetas registradas en la base de datos. Aparecerán en orden de como están
     registradas, cada una se descifrará, y se mostrarán los últimos 4 dígitos del número de la tarjeta además de la fecha de caducidad."""
