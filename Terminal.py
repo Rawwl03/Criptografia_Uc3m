@@ -8,6 +8,9 @@ from cryptography.exceptions import InvalidKey
 from users_data.Tarjeta import Tarjeta
 from Database import Database
 from users_data.Entrada import Entrada
+
+
+"""VARIABLES GLOBALES"""
 contrasena_sys = ""
 
 
@@ -70,6 +73,7 @@ class Terminal:
                     salt_user = base64.b64decode(user[0][2])
                     validada = self.validate_contrs(cont_store, contrasena_h, salt_user)
                     if validada:
+                        contrasena_sys = contrasena_h
                         return username
                     else:
                         print("La contraseña es incorrecta, inténtelo de nuevo")
@@ -347,7 +351,7 @@ class Terminal:
     """Recibe una tarjeta, que es la seleccionada como método de pago, y se realiza el pago restándole  8 al saldo de la tarjeta seleccionada.
     Si no tiene saldo, no se realiza el pago y se devuelve False. Si se realiza, se devuelve True."""
     def pago(self, tarjeta):
-        saldo = tarjeta[3]
+        saldo = tarjeta[4]
         if saldo < 8:
             return False
         else:
@@ -410,9 +414,10 @@ class Terminal:
         user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
-        aes = AESGCM(base64.b64decode(user[0][1]))
+        key, salt_used = self.encriptar_clave(contrasena_sys, True)
+        aes = AESGCM(key)
         tarj_cifr = aes.encrypt(nonce, datos.encode(), None)
-        tarjeta = Tarjeta(user_accedido, base64.b64encode(tarj_cifr), base64.b64encode(nonce), 30)
+        tarjeta = Tarjeta(user_accedido, base64.b64encode(tarj_cifr), base64.b64encode(nonce), base64.b64encode(salt_used), 30)
         self.db.anadir_tarjeta(tarjeta)
         self.db.anadir_log(["Cifrado", user[0][0], datos, base64.b64encode(tarj_cifr)])
         print("La tarjeta es válida y ha sido guardada")
@@ -424,7 +429,7 @@ class Terminal:
         user = self.db.existe_user(tarj_guardada[0])
         nonce = base64.b64decode(tarj_guardada[2])
         cyphertext = base64.b64decode(tarj_guardada[1])
-        key = base64.b64decode(user[0][1])
+        key, salt = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
         aes = AESGCM(key)
         desc = aes.decrypt(nonce, cyphertext, None)
         self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext)])

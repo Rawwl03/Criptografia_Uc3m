@@ -19,7 +19,7 @@ class Database:
 
         creacion_base_entradas = "CREATE TABLE ENTRADAS (Pelicula VARCHAR2, Hora CHAR(5), Sala INT(1), Fila INT(2), Asiento INT(3), Cliente VARCHAR2 NOT NULL, PRIMARY KEY(Pelicula, Hora, Sala, Fila, Asiento), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
                                  "FOREIGN KEY(Asiento) REFERENCES ASIENTOS(Asiento), FOREIGN KEY(Fila) REFERENCES FILAS(Fila), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))  "
-        creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado BLOB, Nonce_tarjeta BLOB NOT NULL," \
+        creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado BLOB, Nonce_tarjeta BLOB NOT NULL, Salt_used BLOB NOT NULL," \
                                  " Saldo INT(3) NOT NULL, PRIMARY KEY(Cifrado), FOREIGN KEY (Propietario) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL," \
                                  " PRIMARY KEY(Username))"
@@ -58,8 +58,8 @@ class Database:
         self.base.commit()
 
     def anadir_tarjeta(self, tarjeta):
-        query = "INSERT INTO TARJETAS (Propietario, Cifrado, Nonce_tarjeta, Saldo) VALUES (?,?,?,?)"
-        self.puntero.execute(query, (tarjeta.propietario, tarjeta.cifrado, tarjeta.nonce_tarj, tarjeta.saldo))
+        query = "INSERT INTO TARJETAS (Propietario, Cifrado, Nonce_tarjeta, Salt_used, Saldo) VALUES (?,?,?,?,?)"
+        self.puntero.execute(query, (tarjeta.propietario, tarjeta.cifrado, tarjeta.nonce_tarj, tarjeta.salt_used, tarjeta.saldo))
         self.base.commit()
 
     def anadir_user_registered(self, user):
@@ -284,11 +284,12 @@ class Database:
         self.puntero.execute(query, (hash_nuevo, salt_nuevo, user[0]))
         self.base.commit()
 
-    def actualizar_tarjeta(self, tarjeta, cifrado_nuevo, nonce_nuevo):
+    def actualizar_tarjeta(self, tarjeta, cifrado_nuevo, nonce_nuevo, salt_nuevo):
         query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
         self.puntero.execute(query, (tarjeta[1]))
-        tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, tarjeta[3])
+        tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, salt_nuevo, tarjeta[4])
         self.anadir_tarjeta(tarjeta_nueva)
 
+    """Cerrar conexión con la base"""
     def cerrar_base(self):
         self.base.close()
