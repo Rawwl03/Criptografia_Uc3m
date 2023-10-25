@@ -281,8 +281,6 @@ class Database:
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
         query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ?, Salt = ? WHERE Username = ?"
-        print(hash_nuevo)
-        print(salt_nuevo)
         self.puntero.execute(query, (hash_nuevo, salt_nuevo, user))
         self.base.commit()
 
