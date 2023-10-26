@@ -429,6 +429,7 @@ class Terminal:
     , cifra los datos mediante el algoritmo AESGCM con la contraseña del usuario (hash), y por último guarda la tarjeta y un log en la
     base de datos indicando que se ha producido un proceso de cifrado. Se produce cifrado simétrico autenticado."""
     def cifrado_tarjeta(self, user_accedido):
+        global contrasena_sys
         user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
@@ -437,23 +438,24 @@ class Terminal:
         tarj_cifr = aes.encrypt(nonce, datos.encode(), None)
         tarjeta = Tarjeta(user_accedido, base64.b64encode(tarj_cifr), base64.b64encode(nonce), base64.b64encode(salt_used), 30)
         self.db.anadir_tarjeta(tarjeta)
-        self.db.anadir_log(["Cifrado", user[0][0], datos, base64.b64encode(tarj_cifr)])
+        self.db.anadir_log(["Cifrado", user[0][0], datos, base64.b64encode(tarj_cifr), base64.b64encode(key)])
         print("La tarjeta es válida y ha sido guardada")
 
     """Con la tarj_guardada que recibe, que se corresponde con una tarjeta del usuario, se obtiene el nonce de la tarjeta y, usando
     el mismo algotirmo simétrico autenticado que en el cifrado de tarjetas, se descifran los datos de la tarjeta. Se añade un log de
     descifrado, y se devuelven los datos descifrados para compararlos"""
     def descifrar_tarj(self, tarj_guardada, selected_key=None):
+        global contrasena_sys
         user = self.db.existe_user(tarj_guardada[0])
         nonce = base64.b64decode(tarj_guardada[2])
         cyphertext = base64.b64decode(tarj_guardada[1])
         if selected_key:
-            key, salt = self.encriptar_clave(selected_key, False, base64.b64decode(tarj_guardada[3]))
+            key, salt_used = self.encriptar_clave(selected_key, False, base64.b64decode(tarj_guardada[3]))
         else:
-            key, salt = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
+            key, salt_used = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
         aes = AESGCM(key)
         desc = aes.decrypt(nonce, cyphertext, None)
-        self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext)])
+        self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext), base64.b64encode(key)])
         return desc.decode()
 
     """Función que va a obtener los datos de la tarjeta y lo que devuelve son esos datos recibidos por input juntos"""

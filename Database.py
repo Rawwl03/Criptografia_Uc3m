@@ -12,7 +12,7 @@ class Database:
     def __init__(self):
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
-        self.generar_base()
+        #self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
@@ -24,7 +24,7 @@ class Database:
         creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL," \
                                  " PRIMARY KEY(Username))"
         creacion_base_log ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
-                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
+                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
         creacion_base_horario = "CREATE TABLE HORARIO (Sala INT(2), Hora CHAR(2) NOT NULL, Pelicula VARCHAR2, PRIMARY KEY(" \
                                 "Sala, Hora, Pelicula), FOREIGN KEY (Pelicula) REFERENCES CARTELERA(Pelicula), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))"
         creacion_base_peliculas = "CREATE TABLE CARTELERA (Pelicula VARCHAR2, Duracion INT(3) NOT NULL, " \
@@ -70,8 +70,8 @@ class Database:
     def anadir_log(self, datos):
         id = self.numero_logs() + 1
         hora_str, fecha_str = self.hora_fecha_actual()
-        query = "INSERT INTO LOG_CIFRADO_SIM (ID, Tipo, Hora, Fecha, Usuario, Data, Cypher) VALUES (?,?,?,?,?,?,?)"
-        self.puntero.execute(query, (id, datos[0], hora_str, fecha_str, datos[1], datos[2], datos[3]))
+        query = "INSERT INTO LOG_CIFRADO_SIM (ID, Tipo, Hora, Fecha, Usuario, Data, Cypher, Key_used) VALUES (?,?,?,?,?,?,?,?)"
+        self.puntero.execute(query, (id, datos[0], hora_str, fecha_str, datos[1], datos[2], datos[3], datos[4]))
         self.base.commit()
 
     def anadir_horario(self, h_pelicula):
