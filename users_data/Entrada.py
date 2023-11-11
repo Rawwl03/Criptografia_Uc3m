@@ -1,3 +1,5 @@
+import hashlib
+
 
 class Entrada:
 
@@ -8,3 +10,7 @@ class Entrada:
         self.fila = fila
         self.asiento = asiento
         self.cliente = cliente
+        self.id = hashlib.md5(self.__str__().encode()).hexdigest()
+
+    def __str__(self):
+        return "Entrada-> "+ self.__dict__

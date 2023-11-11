@@ -2,6 +2,8 @@ import os, base64
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from users_data.User import User
 from freezegun import freeze_time
 from cryptography.exceptions import InvalidKey
@@ -11,8 +13,7 @@ from users_data.Entrada import Entrada
 
 
 """VARIABLES GLOBALES"""
-contrasena_sys = ""
-
+contrasena_user = ""
 
 "Clase en la que se ejecutan todas las operaciones necesarias para el funcionamiento"
 class Terminal:
@@ -41,6 +42,8 @@ class Terminal:
                     accedido = True
                     """El salt y el hash de la contraseña del usuario rotan cada vez que el usuario accede al sistema"""
                     self.rotacion_claves(user_accedido)
+                    if not os.path.exists("claves_privadas/"+user_accedido+".pem"):
+                        self.generar_asimethric_keys(user_accedido)
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
         print("Bienvenido a CINESA, " + user_accedido)
@@ -51,7 +54,7 @@ class Terminal:
     Si todo ha ido correctamente, se devolverá a sys_inicio el usuario que ha accedido. Si no, significa que el usuario ha decidido
     salir de la fase de registro."""
     def acceder(self):
-        global contrasena_sys
+        global contrasena_user
         i = 0
         while i < 3:
             username = input("Introduce tu usuario. Si quiere salir escriba EXIT\n")
@@ -76,7 +79,7 @@ class Terminal:
                     salt_user = base64.b64decode(user[0][2])
                     validada = self.validate_contrs(cont_store, contrasena_h, salt_user)
                     if validada:
-                        contrasena_sys = contrasena_h
+                        contrasena_user = contrasena_h
                         return username
                     else:
                         print("La contraseña es incorrecta, inténtelo de nuevo")
@@ -89,32 +92,36 @@ class Terminal:
      y guardar los datos necesarios en la base de datos para que este usuario pueda acceder posteriormente al sistema. Si todo 
      funciona correctamente, devolverá 0. Si no, significa que el usuario ha decidido salir de la fase de registro."""
     def registro(self):
-        username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
-        if username.upper() == "EXIT":
-            return -1
-        user = self.db.existe_user(username)
-        if len(user) != 0:
-            print("Este nombre de usuario ya ha sido registrado, introduzca otro")
-        else:
-            registro_correcto = False
-            while not registro_correcto:
-                c_validada = False
-                while not c_validada:
-                    contrasena_h = input("Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 10 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
-                    if contrasena_h.upper() == "EXIT":
-                        return -1
-                    if self.aprobacion_clave(contrasena_h):
-                        c_validada = True
-                contrasena_h, salt_new = self.encriptar_clave(contrasena_h)
-                contrasena_h2 = input("La clave introducida es válida. Repita la contraseña de nuevo\n")
-                if self.validate_contrs(contrasena_h, contrasena_h2, salt_new):
-                    registro_correcto = True
-                    print("La contraseña ha sido validada")
+        while True:
+            username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
+            if username.upper() == "EXIT":
+                return -1
+            elif len(username)==0:
+                print("Nombre de usuario vacío, escriba un usuario válido")
+            else:
+                user = self.db.existe_user(username)
+                if len(user) != 0:
+                    print("Este nombre de usuario ya ha sido registrado, introduzca otro")
                 else:
-                    print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
-            new_user = User(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
-            self.db.anadir_user_registered(new_user)
-            return 0
+                    registro_correcto = False
+                    while not registro_correcto:
+                        c_validada = False
+                        while not c_validada:
+                            contrasena_h = input("Introduzca una contraseña para tu cuenta. La contraseña deberá tener más de 10 caracteres y al menos un número y una letra mayúscula. Si desea salir, escriba EXIT\n")
+                            if contrasena_h.upper() == "EXIT":
+                                return -1
+                            if self.aprobacion_clave(contrasena_h):
+                                c_validada = True
+                        contrasena_h, salt_new = self.encriptar_clave(contrasena_h)
+                        contrasena_h2 = input("La clave introducida es válida. Repita la contraseña de nuevo\n")
+                        if self.validate_contrs(contrasena_h, contrasena_h2, salt_new):
+                            registro_correcto = True
+                            print("La contraseña ha sido validada")
+                        else:
+                            print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
+                    new_user = User(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
+                    self.db.anadir_user_registered(new_user)
+                    return 0
 
     """Valida la contraseña introducida como input en el registro de usuario. Características de validación:
      Mínimo 10 caracteres, al menos un número y al menos una mayúscula."""
@@ -352,7 +359,7 @@ class Terminal:
                 print("Acción introducida no válida")
 
     def cambiar_contrasena(self,user_accedido):
-        global contrasena_sys
+        global contrasena_user
         new_pass_validada = False
         while not new_pass_validada:
             new_pass = input(
@@ -361,8 +368,8 @@ class Terminal:
                 return 0
             if self.aprobacion_clave(new_pass):
                 new_pass_validada = True
-        contrasena_antigua = contrasena_sys
-        contrasena_sys = new_pass
+        contrasena_antigua = contrasena_user
+        contrasena_user = new_pass
         self.rotacion_claves(user_accedido,True,contrasena_antigua)
 
 
@@ -429,11 +436,11 @@ class Terminal:
     , cifra los datos mediante el algoritmo AESGCM con la contraseña del usuario (hash), y por último guarda la tarjeta y un log en la
     base de datos indicando que se ha producido un proceso de cifrado. Se produce cifrado simétrico autenticado."""
     def cifrado_tarjeta(self, user_accedido):
-        global contrasena_sys
+        global contrasena_user
         user = self.db.existe_user(user_accedido)
         nonce = os.urandom(12)
         datos = self.datos_tarjeta(user_accedido)
-        key, salt_used = self.encriptar_clave(contrasena_sys, True)
+        key, salt_used = self.encriptar_clave(contrasena_user, True)
         aes = AESGCM(key)
         tarj_cifr = aes.encrypt(nonce, datos.encode(), None)
         tarjeta = Tarjeta(user_accedido, base64.b64encode(tarj_cifr), base64.b64encode(nonce), base64.b64encode(salt_used), 30)
@@ -445,14 +452,14 @@ class Terminal:
     el mismo algotirmo simétrico autenticado que en el cifrado de tarjetas, se descifran los datos de la tarjeta. Se añade un log de
     descifrado, y se devuelven los datos descifrados para compararlos"""
     def descifrar_tarj(self, tarj_guardada, selected_key=None):
-        global contrasena_sys
+        global contrasena_user
         user = self.db.existe_user(tarj_guardada[0])
         nonce = base64.b64decode(tarj_guardada[2])
         cyphertext = base64.b64decode(tarj_guardada[1])
         if selected_key:
             key, salt_used = self.encriptar_clave(selected_key, False, base64.b64decode(tarj_guardada[3]))
         else:
-            key, salt_used = self.encriptar_clave(contrasena_sys, False, base64.b64decode(tarj_guardada[3]))
+            key, salt_used = self.encriptar_clave(contrasena_user, False, base64.b64decode(tarj_guardada[3]))
         aes = AESGCM(key)
         desc = aes.decrypt(nonce, cyphertext, None)
         self.db.anadir_log(["Descifrado", user[0][0], desc.decode(), base64.b64encode(cyphertext), base64.b64encode(key)])
@@ -572,8 +579,8 @@ class Terminal:
     """Metodo que permite actualizar el salt y el hash de la contraseña de un usuario. 
     También actualiza el cifrado de las tarjetas cuando cambiar_tarjetas=True"""
     def rotacion_claves(self, username, cambiar_tarjetas=False, old_password=None):
-        global contrasena_sys
-        contrasena_h, salt_new = self.encriptar_clave(contrasena_sys)
+        global contrasena_user
+        contrasena_h, salt_new = self.encriptar_clave(contrasena_user)
         self.db.actualizar_contrasena(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
         if cambiar_tarjetas:
             tarjetas_usuario=self.db.select_tarjetas(username)
@@ -583,7 +590,7 @@ class Terminal:
                     nonce = base64.b64decode(tarjeta[2])
                     datos_desc_tarjeta=self.descifrar_tarj(tarjeta,old_password)
                     """Se vuelve a generar un nuevo hash de la contraseña con un nuevo salt"""
-                    key, salt_used = self.encriptar_clave(contrasena_sys)
+                    key, salt_used = self.encriptar_clave(contrasena_user)
                     aes = AESGCM(key)
                     tarj_cifr = aes.encrypt(nonce, datos_desc_tarjeta.encode(), None)
                     """Se borra el regitro actual de la tarjeta de la base de datos y se añade uno nuevo actualizado con el nuevo salt y el nuevo cifrado de la tarjeta"""
@@ -615,6 +622,20 @@ class Terminal:
         print(user_accedido+", ha comprado un total de "+str(len(entradas))+" entradas. Tus entradas son las siguientes:")
         for i in range(0, len(entradas)):
             print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][0]+", Hora: "+entradas[i][1]+", Sala: "+str(entradas[i][2])+", Fila: "+str(entradas[i][3])+", Asiento: "+str(entradas[i][4]))
+
+    def generar_asimethric_keys(self, user_accedido):
+        global contrasena_user
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cifrador = serialization.BestAvailableEncryption(contrasena_user.encode())
+        ruta_pem = "claves_privadas/"+user_accedido+".pem"
+        pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
+        with open(ruta_pem, "wb") as archivo:
+            archivo.write(pem)
+        public_key = private_key.public_key()
+        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        datos = [user_accedido, pem_u, ruta_pem]
+        self.db.anadir_claves_asim(datos)
+
 
 if __name__ == "__main__":
     term_1 = Terminal()

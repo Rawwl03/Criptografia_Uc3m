@@ -1,4 +1,4 @@
-import sqlite3, random
+import sqlite3, random, os
 from cinema_structure.Película import Pelicula
 from cinema_structure.Sala import Sala
 from cinema_structure.Fila import Fila
@@ -6,16 +6,30 @@ from cinema_structure.Asiento import Asiento
 from cinema_structure.Horario_Peli import Horario_Peli
 from datetime import datetime
 from users_data.Tarjeta import Tarjeta
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 class Database:
 
     def __init__(self):
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
+        self.contrasena_sys = "Sistema!01!Key"
         #self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
+        #Para poder inicializar la base de datos desde 0
+        self.cerrar_base()
+        os.remove("BaseDatos.db")
+        self.base = sqlite3.connect("BaseDatos.db")
+        self.puntero = self.base.cursor()
+
+        # Borrar claves asimétricas que había porque los users ya no están
+        ficheros_asim_keys = os.listdir("claves_privadas/")
+        for archivo in ficheros_asim_keys:
+            ruta_archivo = os.path.join("claves_privadas/", archivo)
+            os.remove(ruta_archivo)
 
         creacion_base_entradas = "CREATE TABLE ENTRADAS (Pelicula VARCHAR2, Hora CHAR(5), Sala INT(1), Fila INT(2), Asiento INT(3), Cliente VARCHAR2 NOT NULL, PRIMARY KEY(Pelicula, Hora, Sala, Fila, Asiento), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
                                  "FOREIGN KEY(Asiento) REFERENCES ASIENTOS(Asiento), FOREIGN KEY(Fila) REFERENCES FILAS(Fila), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))  "
@@ -23,8 +37,9 @@ class Database:
                                  " Saldo INT(3) NOT NULL, PRIMARY KEY(Cifrado), FOREIGN KEY (Propietario) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL," \
                                  " PRIMARY KEY(Username))"
-        creacion_base_log ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
+        creacion_base_log_cif ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
                                  " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
+        creacion_base_log_firma = "CREATE TABLE LOG_FIRMA (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL)"
         creacion_base_horario = "CREATE TABLE HORARIO (Sala INT(2), Hora CHAR(2) NOT NULL, Pelicula VARCHAR2, PRIMARY KEY(" \
                                 "Sala, Hora, Pelicula), FOREIGN KEY (Pelicula) REFERENCES CARTELERA(Pelicula), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))"
         creacion_base_peliculas = "CREATE TABLE CARTELERA (Pelicula VARCHAR2, Duracion INT(3) NOT NULL, " \
@@ -34,20 +49,25 @@ class Database:
                               " FOREIGN KEY(SALA) REFERENCES SALAS(Sala))"
         creacion_base_asientos = "CREATE TABLE ASIENTOS (Asiento INT(3), Fila INT(2), Sala INT(1), PRIMARY KEY(" \
                                  "Asiento, Fila, Sala), FOREIGN KEY(Fila) REFERENCES FILAS(Asiento), FOREIGN KEY(Sala) REFERENCES SALAS(ID))"
-
+        creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
+                                           "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTRERED(Username))"
         self.puntero.execute(creacion_base_users_registered)
         self.puntero.execute(creacion_base_tarjetas)
-        self.puntero.execute(creacion_base_log)
+        self.puntero.execute(creacion_base_log_cif)
+        #self.puntero.execute(creacion_base_log_firma)
         self.puntero.execute(creacion_base_peliculas)
         self.puntero.execute(creacion_base_salas)
         self.puntero.execute(creacion_base_filas)
         self.puntero.execute(creacion_base_asientos)
         self.puntero.execute(creacion_base_horario)
         self.puntero.execute(creacion_base_entradas)
+        self.puntero.execute(creacion_base_claves_asimetricas)
 
         self.generar_asientos()
         self.generar_cartelera()
         self.generar_horario()
+
+        self.crear_asimkeys_sys()
 
         self.base.commit()
 
@@ -98,6 +118,15 @@ class Database:
         query = "INSERT INTO ASIENTOS (Asiento, Fila, Sala) VALUES (?,?,?)"
         self.puntero.execute(query, (asiento.numero, asiento.fila, asiento.sala))
         self.base.commit()
+
+    def anadir_claves_asim(self, datos):
+        query = "INSERT INTO ASYMETHRIC_KEYS (Usuario, PUBLIC_KEY, PRIVATE_KEY_ROUTE) VALUES (?,?,?)"
+        self.puntero.execute(query, (datos[0], datos[1], datos[2]))
+        self.base.commit()
+
+    """def anadir_log_firma(self, datos):
+        query = "INSERT INTO LOG_FIRMA ()"
+    """
 
     """Método para la generación de las películas disponibles para ver"""
     def generar_cartelera(self):
@@ -220,6 +249,13 @@ class Database:
         entradas = self.puntero.fetchall()
         return entradas
 
+    """Devuelve las claves asimétricas (pública y privada) de un usuario"""
+    def consultar_claves_asim(self, user_accedido):
+        query = "SELECT * FROM ASYMETHRIC_KEYS WHERE Usuario = ?"
+        self.puntero.execute(query, (user_accedido,))
+        asim_keys = self.puntero.fetchall()
+        return asim_keys
+
     """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
     Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""
     def asientos_disponibles(self, entrada_selec):
@@ -289,6 +325,22 @@ class Database:
         self.puntero.execute(query, (tarjeta[1]))
         tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, salt_nuevo, tarjeta[4])
         self.anadir_tarjeta(tarjeta_nueva)
+
+    """Aquí vamos a crear las claves asimétricas del sistema, para poder firmar desde el programa. Se hace aquí porque
+    la base de datos tiene un atributo accesible que es la contraseña utilizada en el sistema, y además se genera junto con la
+    base de datos inicialmente."""
+    def crear_asimkeys_sys(self):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        ruta_pem = "claves_privadas/Sistema.pem"
+        cifrador = serialization.BestAvailableEncryption(self.contrasena_sys.encode())
+        pem_k = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8,
+                                        encryption_algorithm=cifrador)
+        with open(ruta_pem, "wb") as archivo:
+            archivo.write(pem_k)
+        public_key = private_key.public_key()
+        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        datos = ["Sistema", pem_u, ruta_pem]
+        self.anadir_claves_asim(datos)
 
     """Cerrar conexión con la base"""
     def cerrar_base(self):
