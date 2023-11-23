@@ -10,7 +10,7 @@ class Entrada:
         self.fila = fila
         self.asiento = asiento
         self.cliente = cliente
-        self.id = hashlib.md5(self.__str__().encode()).hexdigest()
+        self.id = self.__str__()
 
     def __str__(self):
-        return "Entrada-> "+ self.__dict__
+        return "Entrada -> " + self.__dict__()

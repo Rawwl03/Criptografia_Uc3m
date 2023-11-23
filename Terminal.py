@@ -1,4 +1,4 @@
-import os, base64
+import os, base64, time, cv2, face_recognition
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -29,7 +29,7 @@ class Terminal:
         accedido = False
         while not accedido:
             print("Seleccione una opción para acceder al sistema")
-            acceso = input("Registro || Acceder\n")
+            acceso = input("Registro || Acceder || System\n")
             if acceso.lower() == "registro":
                 CR = self.registro()
                 if CR == 0:
@@ -44,6 +44,10 @@ class Terminal:
                     self.rotacion_claves(user_accedido)
                     if not os.path.exists("claves_privadas/"+user_accedido+".pem"):
                         self.generar_asimethric_keys(user_accedido)
+            elif acceso.lower() == "system":
+                acceso = self.acceso_biom()
+                if acceso:
+                    self.menu_sistema()
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
         print("Bienvenido a CINESA, " + user_accedido)
@@ -119,7 +123,7 @@ class Terminal:
                             print("La contraseña ha sido validada")
                         else:
                             print("Las contraseñas no son iguales, escríbalas correctamente otra vez")
-                    new_user = User(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new))
+                    new_user = User(username, base64.b64encode(contrasena_h), base64.b64encode(salt_new), "U")
                     self.db.anadir_user_registered(new_user)
                     return 0
 
@@ -636,6 +640,80 @@ class Terminal:
         datos = [user_accedido, pem_u, ruta_pem]
         self.db.anadir_claves_asim(datos)
 
+    def acceso_biom(self):
+        # Cargar la imagen de la cara que quieres reconocer
+        imagen_conocida = face_recognition.load_image_file("caraRawwl.jpg")
+        codificacion_conocida_rawwl = face_recognition.face_encodings(imagen_conocida)[0]
+        codificacion_conocida_mario = face_recognition.face_encodings(imagen_conocida)[1]
+
+        # Iniciar la cámara
+        cap = cv2.VideoCapture(0)
+        inicio = time.time()
+        while True:
+            # Capturar un fotograma
+            ret, frame = cap.read()
+            # Encontrar todas las caras en el fotograma
+            ubicaciones = face_recognition.face_locations(frame)
+            codificaciones = face_recognition.face_encodings(frame, ubicaciones)
+            # Dibujar cuadros alrededor de las caras en el fotograma
+            for ubicacion in ubicaciones:
+                top, right, bottom, left = ubicacion
+                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+            # Comparar con las caras conocidas
+            for codificacion in codificaciones:
+                coincidencias = face_recognition.compare_faces([codificacion_conocida_rawwl, codificacion_conocida_mario], codificacion)
+                if True in coincidencias:
+                    print("Acceso al sistema permitido")
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return True
+            # Mostrar el fotograma
+            cv2.imshow('Frame', frame)
+            lap = time.time()
+            if lap-inicio > 10:
+                print("Acceso al sistema denegado")
+                cap.release()
+                cv2.destroyAllWindows()
+                return False
+            # Salir del bucle si se presiona la tecla 'q'
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print("Acceso al sistema denegado")
+                cap.release()
+                cv2.destroyAllWindows()
+                return False
+            time.sleep(0.5)
+
+    def menu_sistema(self):
+        print("Selecciona la acción de gestión de sistema que desea realizar\n")
+        while True:
+            accion = input("Usuarios || Peticiones || Entradas || EXIT")
+            if accion.lower() == "usuarios":
+                self.gestion_users()
+            elif accion.lower() == "peticiones":
+                print("ver peticiones")
+            elif accion.lower() == "entradas":
+                print("ver entradas")
+            elif accion.lower() == "exit":
+                print("Saliendo del menú de sistema")
+                return True
+            else:
+                print("Escriba una acción válida")
+
+    def gestion_users(self):
+        accion_selec = False
+        while not accion_selec:
+            accion = input(" Ver || Roles || Eliminar || EXIT")
+            if accion.lower() == "usuarios":
+                print("ver users")
+            elif accion.lower() == "peticiones":
+                print("ver peticiones")
+            elif accion.lower() == "entradas":
+                print("ver entradas")
+            elif accion.lower() == "exit":
+                print("Saliendo del menú de sistema")
+                return True
+            else:
+                print("Escriba una acción válida")
 
 if __name__ == "__main__":
     term_1 = Terminal()

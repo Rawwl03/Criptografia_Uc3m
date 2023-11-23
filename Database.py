@@ -31,11 +31,11 @@ class Database:
             ruta_archivo = os.path.join("claves_privadas/", archivo)
             os.remove(ruta_archivo)
 
-        creacion_base_entradas = "CREATE TABLE ENTRADAS (Pelicula VARCHAR2, Hora CHAR(5), Sala INT(1), Fila INT(2), Asiento INT(3), Cliente VARCHAR2 NOT NULL, PRIMARY KEY(Pelicula, Hora, Sala, Fila, Asiento), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
+        creacion_base_entradas = "CREATE TABLE ENTRADAS (ID INT(3), Pelicula VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Sala INT(1) NOT NULL, Fila INT(2) NOT NULL, Asiento INT(3) NOT NULL, Cliente VARCHAR2 NOT NULL, PRIMARY KEY(ID), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
                                  "FOREIGN KEY(Asiento) REFERENCES ASIENTOS(Asiento), FOREIGN KEY(Fila) REFERENCES FILAS(Fila), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))  "
         creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado BLOB, Nonce_tarjeta BLOB NOT NULL, Salt_used BLOB NOT NULL," \
                                  " Saldo INT(3) NOT NULL, PRIMARY KEY(Cifrado), FOREIGN KEY (Propietario) REFERENCES USERS_REGISTERED(Username))"
-        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL," \
+        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL, Rol VARCHAR2 NOT NULL," \
                                  " PRIMARY KEY(Username))"
         creacion_base_log_cif ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
                                  " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
@@ -51,6 +51,8 @@ class Database:
                                  "Asiento, Fila, Sala), FOREIGN KEY(Fila) REFERENCES FILAS(Asiento), FOREIGN KEY(Sala) REFERENCES SALAS(ID))"
         creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
                                            "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTRERED(Username))"
+        creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada "
+        creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_TERMINADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada"
         self.puntero.execute(creacion_base_users_registered)
         self.puntero.execute(creacion_base_tarjetas)
         self.puntero.execute(creacion_base_log_cif)
@@ -84,7 +86,7 @@ class Database:
 
     def anadir_user_registered(self, user):
         query = "INSERT INTO USERS_REGISTERED (Username, Hash_contraseña, Salt) VALUES (?,?,?)"
-        self.puntero.execute(query, (user.username, user.hash, user.salt))
+        self.puntero.execute(query, (user.username, user.hash, user.salt, user.role))
         self.base.commit()
 
     def anadir_log(self, datos):
