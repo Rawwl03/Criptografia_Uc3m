@@ -642,7 +642,7 @@ class Terminal:
 
     def acceso_biom(self):
         # Cargar la imagen de la cara que quieres reconocer
-        imagen_conocida = face_recognition.load_image_file("caraRawwl.jpg")
+        imagen_conocida = face_recognition.load_image_file("accesoBiom.jpg")
         codificacion_conocida_rawwl = face_recognition.face_encodings(imagen_conocida)[0]
         codificacion_conocida_mario = face_recognition.face_encodings(imagen_conocida)[1]
 
