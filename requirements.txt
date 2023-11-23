@@ -2,6 +2,7 @@ setuptools == 65.5.1
 cryptography == 41.0.4
 packaging == 23.2
 pip == 22.3.1
+dlib == 19.24.2
 importlib-metadata == 6.8.0
 opencv-python == 4.8.1.78
 typing-extensions == 4.8.0
