@@ -1,3 +1,4 @@
+import base64, json
 import sqlite3, random, os
 from cinema_structure.Película import Pelicula
 from cinema_structure.Sala import Sala
@@ -31,11 +32,11 @@ class Database:
             ruta_archivo = os.path.join("claves_privadas/", archivo)
             os.remove(ruta_archivo)
 
-        creacion_base_entradas = "CREATE TABLE ENTRADAS (ID INT(3), Pelicula VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Sala INT(1) NOT NULL, Fila INT(2) NOT NULL, Asiento INT(3) NOT NULL, Cliente VARCHAR2 NOT NULL, PRIMARY KEY(ID), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
+        creacion_base_entradas = "CREATE TABLE ENTRADAS (ID BLOB, Pelicula VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Sala INT(1) NOT NULL, Fila INT(2) NOT NULL, Asiento INT(3) NOT NULL, Cliente VARCHAR2 NOT NULL, PRIMARY KEY(ID), FOREIGN KEY(Pelicula) REFERENCES CARTELERA(Pelicula)," \
                                  "FOREIGN KEY(Asiento) REFERENCES ASIENTOS(Asiento), FOREIGN KEY(Fila) REFERENCES FILAS(Fila), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))  "
         creacion_base_tarjetas = "CREATE TABLE TARJETAS (Propietario VARCHAR2 NOT NULL, Cifrado BLOB, Nonce_tarjeta BLOB NOT NULL, Salt_used BLOB NOT NULL," \
                                  " Saldo INT(3) NOT NULL, PRIMARY KEY(Cifrado), FOREIGN KEY (Propietario) REFERENCES USERS_REGISTERED(Username))"
-        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL, Rol VARCHAR2 NOT NULL," \
+        creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL, Rol VARCHAR2 NOT NULL, Saldo INT(3) NOT NULL," \
                                  " PRIMARY KEY(Username))"
         creacion_base_log_cif ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
                                  " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
@@ -44,15 +45,17 @@ class Database:
                                 "Sala, Hora, Pelicula), FOREIGN KEY (Pelicula) REFERENCES CARTELERA(Pelicula), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))"
         creacion_base_peliculas = "CREATE TABLE CARTELERA (Pelicula VARCHAR2, Duracion INT(3) NOT NULL, " \
                                   "Descripción VARCHAR2, PRIMARY KEY(Pelicula))"
-        creacion_base_salas = "CREATE TABLE SALAS (Sala INT(1), Num_Filas INT(2), PRIMARY KEY(Sala))"
+        creacion_base_salas = "CREATE TABLE SALAS (Sala INT(1), Num_Filas INT(2) NOT NULL, Asientos_Fila INT(3) NOT NULL, PRIMARY KEY(Sala))"
         creacion_base_filas = "CREATE TABLE FILAS (Fila INT(2), Sala INT(1), Num_Asientos INT(3) NOT NULL, PRIMARY KEY(Fila, Sala)," \
                               " FOREIGN KEY(SALA) REFERENCES SALAS(Sala))"
         creacion_base_asientos = "CREATE TABLE ASIENTOS (Asiento INT(3), Fila INT(2), Sala INT(1), PRIMARY KEY(" \
                                  "Asiento, Fila, Sala), FOREIGN KEY(Fila) REFERENCES FILAS(Asiento), FOREIGN KEY(Sala) REFERENCES SALAS(ID))"
         creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
                                            "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTRERED(Username))"
-        creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada "
-        creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_TERMINADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada"
+        creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username))"
+        creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_CONFIRMADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB, Estado VARCHAR2 NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username)) "
+        creacion_base_cargos = "CREATE TABLE CARGOS(Tarjeta BLOB, Entrada BLOB, FOREIGN KEY(Tarjeta) REFERENCES TARJETAS(Cifrado), PRIMARY KEY(Entrada))"
+
         self.puntero.execute(creacion_base_users_registered)
         self.puntero.execute(creacion_base_tarjetas)
         self.puntero.execute(creacion_base_log_cif)
@@ -64,6 +67,9 @@ class Database:
         self.puntero.execute(creacion_base_horario)
         self.puntero.execute(creacion_base_entradas)
         self.puntero.execute(creacion_base_claves_asimetricas)
+        self.puntero.execute(creacion_base_peticiones)
+        self.puntero.execute(creacion_base_peticiones_terminadas)
+        self.puntero.execute(creacion_base_cargos)
 
         self.generar_asientos()
         self.generar_cartelera()
@@ -75,8 +81,8 @@ class Database:
 
     """Métodos para añadir elementos a la base de datos en su respectiva tabla, con el formato de la tabla"""
     def anadir_entrada(self, entrada):
-        query = "INSERT INTO ENTRADAS (Pelicula, Hora, Sala, Fila, Asiento, Cliente) VALUES (?,?,?,?,?,?)"
-        self.puntero.execute(query, (entrada.pelicula, entrada.hora, entrada.sala, entrada.fila, entrada.asiento, entrada.cliente))
+        query = "INSERT INTO ENTRADAS (Id, Pelicula, Hora, Sala, Fila, Asiento, Cliente) VALUES (?,?,?,?,?,?,?)"
+        self.puntero.execute(query, (entrada.id, entrada.pelicula, entrada.hora, entrada.sala, entrada.fila, entrada.asiento, entrada.cliente))
         self.base.commit()
 
     def anadir_tarjeta(self, tarjeta):
@@ -85,8 +91,8 @@ class Database:
         self.base.commit()
 
     def anadir_user_registered(self, user):
-        query = "INSERT INTO USERS_REGISTERED (Username, Hash_contraseña, Salt) VALUES (?,?,?)"
-        self.puntero.execute(query, (user.username, user.hash, user.salt, user.role))
+        query = "INSERT INTO USERS_REGISTERED (Username, Hash_contraseña, Salt, Rol, Saldo) VALUES (?,?,?,?,?)"
+        self.puntero.execute(query, (user.username, user.hash, user.salt, user.role, user.saldo_cuenta))
         self.base.commit()
 
     def anadir_log(self, datos):
@@ -107,8 +113,8 @@ class Database:
         self.base.commit()
 
     def anadir_sala(self, sala):
-        query = "INSERT INTO SALAS (Sala, Num_filas) VALUES (?,?)"
-        self.puntero.execute(query, (sala.numero, sala.num_filas))
+        query = "INSERT INTO SALAS (Sala, Num_filas, Asientos_Fila) VALUES (?,?,?)"
+        self.puntero.execute(query, (sala.numero, sala.num_filas, sala.asientos_filas))
         self.base.commit()
 
     def anadir_fila(self, fila):
@@ -129,6 +135,20 @@ class Database:
     """def anadir_log_firma(self, datos):
         query = "INSERT INTO LOG_FIRMA ()"
     """
+
+    def anadir_peticion(self, peticion):
+        query = "INSERT INTO PETICIONES(Id, Tipo, Entrada, Username, FIRMA) VALUES (?,?,?,?,?)"
+        self.puntero.execute(query, (peticion[0], peticion[1], peticion[2], peticion[3], peticion[4]))
+        self.base.commit()
+
+    def anadir_peticion_confirmada(self, peticion):
+        query = "INSERT INTO PETICIONES_CONFIRMADAS(Id, Tipo, Entrada, Username, FIRMA, Estado) VALUES (?,?,?,?,?,?)"
+        self.puntero.execute(query, (peticion[0], peticion[1], peticion[2], peticion[3], peticion[4], peticion[5]))
+        self.base.commit()
+
+    def anadir_cargo(self, cargo):
+        query = "INSERT INTO CARGOS(Tarjeta, Entrada) VALUES (?,?)"
+        self.puntero.execute(query, (cargo[0], cargo[1]))
 
     """Método para la generación de las películas disponibles para ver"""
     def generar_cartelera(self):
@@ -168,8 +188,8 @@ class Database:
     def generar_asientos(self):
         for i in range(0,9):
             filas = random.randint(6,15)
-            self.anadir_sala(Sala(i+1, filas))
             asientos = random.randint(15,20)
+            self.anadir_sala(Sala(i+1, filas, asientos))
             for j in range(0, filas):
                 self.anadir_fila(Fila(i+1, j+1, asientos))
                 for k in range(0, asientos):
@@ -208,6 +228,36 @@ class Database:
         return hora_str
 
     """------------------CONSULTAS------------------"""
+
+    def consultar_peticiones(self):
+        query = "SELECT * FROM PETICIONES"
+        self.puntero.execute(query)
+        pets_u = self.puntero.fetchall()
+        return pets_u
+
+    def consultar_peticiones_conf(self):
+        query = "SELECT * FROM PETICIONES_CONFIRMADAS"
+        self.puntero.execute(query)
+        pets_c = self.puntero.fetchall()
+        return pets_c
+
+    def consultar_peticiones_user(self, user):
+        query = "SELECT * FROM PETICIONES WHERE Username = ?"
+        self.puntero.execute(query, (user, ))
+        pets = self.puntero.fetchall()
+        return pets
+
+    def consultar_peticiones_conf_user(self, user):
+        query = "SELECT * FROM PETICIONES_CONFIRMADAS  WHERE Username = ?"
+        self.puntero.execute(query, (user, ))
+        pets_c = self.puntero.fetchall()
+        return pets_c
+
+    def consultar_users(self):
+        query = "SELECT * FROM USERS_REGISTERED"
+        self.puntero.execute(query)
+        users = self.puntero.fetchall()
+        return users
 
     """Consultas todas las películas disponibles"""
     def consultar_peliculas(self):
@@ -258,24 +308,49 @@ class Database:
         asim_keys = self.puntero.fetchall()
         return asim_keys
 
+    def num_sala(self, salaNum):
+        query = "SELECT * FROM SALAS WHERE Sala = ?"
+        self.puntero.execute(query, (salaNum,))
+        sala = self.puntero.fetchall()
+        return sala
+
     """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
     Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""
     def asientos_disponibles(self, entrada_selec):
-        asientos_dispo = []
         query = "SELECT * FROM ENTRADAS WHERE Sala = '"+str(entrada_selec[0])+"' AND Hora = '"+entrada_selec[1]+"' AND Pelicula = '"+entrada_selec[2]+"'"
         self.puntero.execute(query)
         entradas = self.puntero.fetchall()
         query = "SELECT * FROM ASIENTOS WHERE Sala = '"+str(entrada_selec[0])+"'"
         self.puntero.execute(query)
         asientos = self.puntero.fetchall()
+        query = "SELECT * FROM PETICIONES"
+        self.puntero.execute(query)
+        pets = self.puntero.fetchall()
+        query = "SELECT * FROM PETICIONES_CONFIRMADAS"
+        self.puntero.execute(query)
+        pets_c = self.puntero.fetchall()
+        disponibilidad = []
         for asiento in asientos:
             asiento_aparece = False
             for entrada in entradas:
                 if asiento[0] == entrada[4] and asiento[1] == entrada[3]:
                     asiento_aparece = True
+                    disponibilidad.append([asiento[0], asiento[1], "O"])
+            for peticion in pets:
+                entrada = json.loads(base64.b64decode(peticion[2]).decode('utf-8'))
+                if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada["pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[1]:
+                    asiento_aparece = True
+                    disponibilidad.append([asiento[0], asiento[1], "O"])
+            for peticion_c in pets_c:
+                entrada = json.loads(base64.b64decode(peticion_c[2]).decode('utf-8'))
+                if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada[
+                    "pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[
+                    1]:
+                    asiento_aparece = True
+                    disponibilidad.append([asiento[0], asiento[1], "O"])
             if not asiento_aparece:
-                asientos_dispo.append(asiento)
-        return asientos_dispo
+                    disponibilidad.append([asiento[0], asiento[1], "-"])
+        return disponibilidad
 
     """Método que devuelve la fecha y hora actual en el formato deseado"""
     def hora_fecha_actual(self):
@@ -314,7 +389,25 @@ class Database:
         self.puntero.execute(query, (tarjeta[1],))
         self.base.commit()
 
+    def borrar_user(self, user):
+        query = "DELETE FROM USERS_REGISTERED WHERE Username = ?"
+        self.puntero.execute(query, (user[0],))
+        self.base.commit()
 
+    def borrar_peticion(self, peticionID):
+        query = "DELETE FROM PETICIONES WHERE Id = ?"
+        self.puntero.execute(query, (peticionID,))
+        self.base.commit()
+
+    def borrar_peticion_conf(self, peticionID):
+        query = "DELETE FROM PETICIONES_CONFIRMADAS WHERE Id = ?"
+        self.puntero.execute(query, (peticionID,))
+        self.base.commit()
+
+    def borrar_entrada(self, entradaID):
+        query = "DELETE FROM ENTRADAS WHERE Id = ?"
+        self.puntero.execute(query, (entradaID,))
+        self.base.commit()
 
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
@@ -327,6 +420,11 @@ class Database:
         self.puntero.execute(query, (tarjeta[1]))
         tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, salt_nuevo, tarjeta[4])
         self.anadir_tarjeta(tarjeta_nueva)
+
+    def actualizar_rol_user(self, user, nuevo_rol):
+        query = "UPDATE USERS_REGISTERED SET Rol = ? WHERE Username = ?"
+        self.puntero.execute(query, (nuevo_rol, user))
+        self.base.commit()
 
     """Aquí vamos a crear las claves asimétricas del sistema, para poder firmar desde el programa. Se hace aquí porque
     la base de datos tiene un atributo accesible que es la contraseña utilizada en el sistema, y además se genera junto con la

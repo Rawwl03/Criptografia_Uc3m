@@ -1,4 +1,4 @@
-import hashlib
+import base64, json
 
 
 class Entrada:
@@ -13,4 +13,4 @@ class Entrada:
         self.id = self.__str__()
 
     def __str__(self):
-        return "Entrada -> " + self.__dict__()
+        return base64.b64encode(json.dumps(self.__dict__).encode('utf-8'))

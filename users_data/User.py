@@ -5,3 +5,4 @@ class User:
         self.hash = hash
         self.salt = salt
         self.role = rol
+        self.saldo_cuenta = 0

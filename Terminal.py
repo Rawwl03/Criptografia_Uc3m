@@ -1,4 +1,4 @@
-import os, base64, time, cv2, face_recognition
+import os, base64, time, cv2, face_recognition, json
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -21,6 +21,7 @@ class Terminal:
     @freeze_time("2023-10-02")
     def __init__(self):
         self.db = Database()
+        self.modoAdmin = False
 
     """Función de inicio de la terminal. Tendrás que registrarte (crear user que no este ya registrado y escribir contraseña válida)
     o acceder con una cuenta existente (escribir usuario y contraseña respectivos). Una vez accedido, se pasa a acc_cine, 
@@ -44,10 +45,11 @@ class Terminal:
                     self.rotacion_claves(user_accedido)
                     if not os.path.exists("claves_privadas/"+user_accedido+".pem"):
                         self.generar_asimethric_keys(user_accedido)
+                    self.mostrar_peticiones_user(user_accedido)
             elif acceso.lower() == "system":
                 acceso = self.acceso_biom()
                 if acceso:
-                    self.menu_sistema()
+                    self.menu_sistema("Sistema")
             else:
                 print("Tienes que registrarte o acceder con una cuenta")
         print("Bienvenido a CINESA, " + user_accedido)
@@ -100,7 +102,7 @@ class Terminal:
             username = input("Introduce tu nombre de usuario deseado. Si quiere salir escriba EXIT\n")
             if username.upper() == "EXIT":
                 return -1
-            elif len(username)==0:
+            elif len(username)==0 or username == "Sistema":
                 print("Nombre de usuario vacío, escriba un usuario válido")
             else:
                 user = self.db.existe_user(username)
@@ -171,13 +173,15 @@ class Terminal:
         salir_sys = False
         while not salir_sys:
             print("¿Que acción desea realizar, "+ user_accedido+"?")
-            accion = input("Cartelera || Comprar || Perfil || Salir\n")
+            accion = input("Cartelera || Comprar || Perfil || Peticion || Salir\n")
             if accion.lower() == "cartelera":
                 self.acc_cartelera(user_accedido)
-            elif accion.lower()=="comprar":
+            elif accion.lower() == "comprar":
                 self.acc_compra(user_accedido)
-            elif accion.lower()=="perfil":
+            elif accion.lower() == "perfil":
                 self.acc_perfil(user_accedido)
+            elif accion.lower() == "peticion":
+                self.hacer_peticion(user_accedido)
             elif accion.lower()=="salir":
                 print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
                 salir_sys = True
@@ -306,13 +310,17 @@ class Terminal:
             elif acc_tarj.upper() == "SELECCIONAR":
                 tarjeta_db = self.validar_tarjeta(user_accedido)
                 if tarjeta_db:
-                    pago_finished = self.pago(tarjeta_db)
-                    if not pago_finished:
+                    saldo_tarj = tarjeta_db[4]
+                    if saldo_tarj < 8:
                         print("Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
                     else:
                         pago = True
                         entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[1], asiento[0], user_accedido)
-                        self.db.anadir_entrada(entrada)
+                        long_p = self.db.consultar_peticiones()
+                        peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
+                        firma = 1
+                        self.db.anadir_cargo([tarjeta_db[1], entrada.id])
+                        self.db.anadir_peticion(peticion+[firma])
                 else:
                     print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
             elif acc_tarj.upper() == "BORRAR":
@@ -334,33 +342,71 @@ class Terminal:
 
     """Función que tiene la gestión del perfil de user_accedido. Se pueden realizar 6 acciones."""
     def acc_perfil(self, user_accedido):
-        accion = False
-        while not accion:
-            print("¿Que acción deseas realizar en tu perfil?")
-            acc = input("Guardar (tarjeta) || Borrar (tarjeta) || Cambiar (contraseña) || Entradas || Tarjetas || EXIT\n")
-            if acc.lower() == "guardar":
-                self.cifrado_tarjeta(user_accedido)
-            elif acc.lower() == "borrar":
-                tarjetas = self.mostrar_tarjetas(user_accedido)
-                if len(tarjetas)>0:
-                    borrado = False
-                    while not borrado:
-                        selec = self.borrar_tarjeta(tarjetas)
-                        if selec == "EXIT":
-                            return 0
-                        elif selec:
-                            borrado = True
-                    print("La tarjeta ha sido borrada con éxito")
-            elif acc.lower() == "cambiar":
-                self.cambiar_contrasena(user_accedido)
-            elif acc.lower() == "entradas":
-                self.mostrar_entradas(user_accedido)
-            elif acc.lower() == "tarjetas":
-                self.mostrar_tarjetas(user_accedido)
-            elif acc.lower() == "exit":
-                return 0
-            else:
-                print("Acción introducida no válida")
+        user = self.db.existe_user(user_accedido)
+        if user[0][3] == "U":
+            accion = False
+            while not accion:
+                print("¿Que acción deseas realizar en tu perfil?")
+                acc = input("Guardar (tarjeta) || Borrar (tarjeta) || Cambiar (contraseña) || Entradas || Tarjetas || Peticiones || EXIT\n")
+                if acc.lower() == "guardar":
+                    self.cifrado_tarjeta(user_accedido)
+                elif acc.lower() == "borrar":
+                    tarjetas = self.mostrar_tarjetas(user_accedido)
+                    if len(tarjetas)>0:
+                        borrado = False
+                        while not borrado:
+                            selec = self.borrar_tarjeta(tarjetas)
+                            if selec == "EXIT":
+                                return 0
+                            elif selec:
+                                borrado = True
+                        print("La tarjeta ha sido borrada con éxito")
+                elif acc.lower() == "cambiar":
+                    self.cambiar_contrasena(user_accedido)
+                elif acc.lower() == "entradas":
+                    self.mostrar_entradas(user_accedido)
+                elif acc.lower() == "tarjetas":
+                    self.mostrar_tarjetas(user_accedido)
+                elif acc.lower() == "peticiones":
+                    self.ver_peticiones(user_accedido, True)
+                elif acc.lower() == "exit":
+                    return 0
+                else:
+                    print("Acción introducida no válida")
+        elif user[0][3] == "A":
+            accion = False
+            while not accion:
+                print("¿Que acción deseas realizar en tu perfil?")
+                acc = input(
+                    "Guardar (tarjeta) || Borrar (tarjeta) || Cambiar (contraseña) || Entradas || Tarjetas || Peticiones || Admin || EXIT\n")
+                if acc.lower() == "guardar":
+                    self.cifrado_tarjeta(user_accedido)
+                elif acc.lower() == "borrar":
+                    tarjetas = self.mostrar_tarjetas(user_accedido)
+                    if len(tarjetas) > 0:
+                        borrado = False
+                        while not borrado:
+                            selec = self.borrar_tarjeta(tarjetas)
+                            if selec == "EXIT":
+                                return 0
+                            elif selec:
+                                borrado = True
+                        print("La tarjeta ha sido borrada con éxito")
+                elif acc.lower() == "cambiar":
+                    self.cambiar_contrasena(user_accedido)
+                elif acc.lower() == "entradas":
+                    self.mostrar_entradas(user_accedido)
+                elif acc.lower() == "tarjetas":
+                    self.mostrar_tarjetas(user_accedido)
+                elif acc.lower() == "peticiones":
+                    self.ver_peticiones(user_accedido, True)
+                elif acc.lower() == "admin":
+                    self.modoAdmin = True
+                    self.menu_sistema(user_accedido)
+                elif acc.lower() == "exit":
+                    return 0
+                else:
+                    print("Acción introducida no válida")
 
     def cambiar_contrasena(self,user_accedido):
         global contrasena_user
@@ -417,17 +463,33 @@ class Terminal:
     si el usuario desea salir del menú de selección de asiento."""
     def seleccion_asiento(self, entrada_selec):
         print("Estos son todos los asientos disponibles para la película '"+ entrada_selec[2]+"' a las "+entrada_selec[1])
-        print("\t---Sala " + str(entrada_selec[0]) + "---")
-        asientos_dispo = self.db.asientos_disponibles(entrada_selec)
-        for asiento in asientos_dispo:
-            print("-> Fila "+str(asiento[1])+", Asiento "+str(asiento[0]))
+        print("\t\t---Sala " + str(entrada_selec[0]) + "---\n")
+        asientos = self.db.asientos_disponibles(entrada_selec)
+        asientos_dispo = []
+        for asiento in asientos:
+            if asiento[2] == "-":
+                asientos_dispo.append(asiento)
+        datos_sala = self.db.num_sala(entrada_selec[0])
+        print("\t\t\t\t\t\t\t\t\t(Pantalla)\n")
+        for i in range(0, datos_sala[0][1]):
+            print("-> Fila "+str(i+1)+"\t\t", end=" ")
+            for j in range(0, datos_sala[0][2]):
+                print(asientos[j+i*datos_sala[0][1]][2], end="  ")
+            print("\n")
+        print("Nº Asiento:", end="\t\t ")
+        for i in range(0, datos_sala[0][2]):
+            if i+1 > 9:
+                print(str(i+1), end=" ")
+            else:
+                print(str(i+1), end="  ")
+        print("\n")
         seleccionado = False
         while not seleccionado:
             sel = input("Introduzca el asiento que desees en el formato Fila/Asiento. Si desea salir, escriba EXIT\n")
             if sel.upper() == "EXIT":
                 return False, None
             datos_asiento = sel.split('/')
-            if len(datos_asiento) == 1:
+            if len(datos_asiento) != 2:
                 print("No has introducido el asiento deseado en el formato correcto")
             else:
                 for asiento in asientos_dispo:
@@ -683,37 +745,330 @@ class Terminal:
                 return False
             time.sleep(0.5)
 
-    def menu_sistema(self):
-        print("Selecciona la acción de gestión de sistema que desea realizar\n")
+    def menu_sistema(self, user_accedido):
+        print("Selecciona la acción de gestión de sistema que desea realizar")
+        if user_accedido == "Sistema":
+            while True:
+                accion = input("Usuarios || Peticiones || Entradas || EXIT\n")
+                if accion.lower() == "usuarios":
+                    self.gestion_users(user_accedido)
+                elif accion.lower() == "peticiones":
+                    self.gestionar_peticiones()
+                elif accion.lower() == "entradas":
+                    print("ver entradas")
+                elif accion.lower() == "exit":
+                    print("Saliendo del menú de sistema")
+                    return True
+                else:
+                    print("Escriba una acción válida")
+        else:
+            while True:
+                accion = input("Usuarios || Peticiones || EXIT\n")
+                if accion.lower() == "usuarios":
+                    self.gestion_users(user_accedido)
+                elif accion.lower() == "peticiones":
+                    self.gestionar_peticiones()
+                elif accion.lower() == "exit":
+                    print("Saliendo del menú de sistema")
+                    return True
+                else:
+                    print("Escriba una acción válida")
+
+    def gestion_users(self, user_accedido):
         while True:
-            accion = input("Usuarios || Peticiones || Entradas || EXIT")
-            if accion.lower() == "usuarios":
-                self.gestion_users()
-            elif accion.lower() == "peticiones":
-                print("ver peticiones")
-            elif accion.lower() == "entradas":
-                print("ver entradas")
+            accion = input(" Ver || Eliminar || EXIT\n")
+            if accion.lower() == "ver":
+                self.mostrar_usuarios(user_accedido, False)
+            elif accion.lower() == "eliminar":
+                self.eliminar_user(user_accedido)
             elif accion.lower() == "exit":
-                print("Saliendo del menú de sistema")
+                print("Saliendo del menú de gestión de usuarios")
                 return True
             else:
                 print("Escriba una acción válida")
 
-    def gestion_users(self):
-        accion_selec = False
-        while not accion_selec:
-            accion = input(" Ver || Roles || Eliminar || EXIT")
-            if accion.lower() == "usuarios":
-                print("ver users")
-            elif accion.lower() == "peticiones":
-                print("ver peticiones")
-            elif accion.lower() == "entradas":
-                print("ver entradas")
-            elif accion.lower() == "exit":
-                print("Saliendo del menú de sistema")
+    def mostrar_usuarios(self, user_accedido, solo_mostrar, admin = False):
+        users = self.db.consultar_users()
+        if len(users) == 0:
+            print("No hay users registrados actualmente")
+        else:
+            print("-> USUARIO || ROL")
+            for i in range(0, len(users)):
+                if admin:
+                    if users[i][3] == "U":
+                        print("/ " + users[i][0] + " - " + users[i][3])
+                else:
+                    print("/ " + users[i][0] + " - " + users[i][3])
+        if user_accedido == "Sistema" and not solo_mostrar:
+            while True:
+                upgrade = input("¿Desea cambiar el rol de algún usuario? SI || NO\n")
+                if upgrade.lower() == "si":
+                    name = input("Escriba el nombre del usuario que desea cambiarle el rol\n")
+                    for user in users:
+                        if user[0] == name:
+                            if user[3] == "U":
+                                while True:
+                                    conf = input("El rol de "+user[0]+" pasará de Usuario a Administrador, ¿desea continuar? SI || NO")
+                                    if conf.lower() == "si":
+                                        self.db.actualizar_rol_user(user[0], "A")
+                                        peticiones_user = self.db.consultar_peticiones_user(user[0])
+                                        for peticion_u in peticiones_user:
+                                            if peticion_u[1] == "Rol":
+                                                self.db.borrar_peticion(peticion_u[0])
+                                        peticiones_conf = self.db.consultar_peticiones_conf()
+                                        self.db.anadir_peticion_confirmada([len(peticiones_conf)+1, "Rol", None, user[0], None, "Cambio1"])
+                                        print("El rol de "+user[0]+" ha sido actualizado correctamente")
+                                        return True
+                                    elif conf.lower() == "no":
+                                        return True
+                                    else:
+                                        print("Acción no válida")
+                            elif user[3] == "A":
+                                while True:
+                                    conf = input("El rol de "+user[0]+" pasará de Administrador a Usuario, ¿desea continuar? SI || NO")
+                                    if conf.lower() == "si":
+                                        self.db.actualizar_rol_user(user[0], "U")
+                                        peticiones_conf = self.db.consultar_peticiones_conf()
+                                        self.db.anadir_peticion_confirmada([len(peticiones_conf)+1, "Rol", None, user[0], None, "Cambio2"])
+                                        print("El rol de "+user[0]+" ha sido actualizado correctamente")
+                                        return True
+                                    elif conf.lower() == "no":
+                                        return True
+                                    else:
+                                        print("Acción no válida")
+                    print("El nombre introducido no corresponde a ningún usuario")
+                elif upgrade.lower() == "no":
+                    return True
+                else:
+                    print("Acción no válida")
+
+
+    def eliminar_user(self, user_accedido):
+        users = self.db.consultar_users()
+        if user_accedido != "Sistema":
+            users_u = []
+            for user in users:
+                if user[3] == "U":
+                    users_u.append(user)
+            users = users_u
+        if len(users) == 0:
+            print("No hay users registrados actualmente")
+            return True
+        else:
+            if user_accedido == "Sistema":
+                self.mostrar_usuarios(user_accedido, True)
+            else:
+                self.mostrar_usuarios(user_accedido, True, True)
+            while True:
+                name = input("Escriba el nombre del usuario que desea cambiarle el rol\n")
+                for user in users:
+                    if user[0] == name:
+                        while True:
+                            conf = input("Se eliminará el usuario " + user[0] + ", ¿desea continuar? SI || NO")
+                            if conf.lower() == "si":
+                                self.db.borrar_user(user[0])
+                                peticiones_conf_user = self.db.consultar_peticiones_conf_user(user[0])
+                                peticiones_user = self.db.consultar_peticiones_user(user[0])
+                                for peticion in peticiones_user:
+                                    self.db.borrar_peticion_conf(peticion[0])
+                                for peticion in peticiones_conf_user:
+                                    self.db.borrar_peticion(peticion[0])
+                                self.recolocar_peticiones()
+                                self.recolocar_peticiones_conf()
+                                print("El usuario " + user[0] + " ha sido eliminado correctamente")
+                                return True
+                            elif conf.lower() == "no":
+                                return True
+                            else:
+                                print("Acción no válida")
+                print("El nombre introducido no corresponde a ningún usuario")
+
+    def gestionar_peticiones(self):
+        while True:
+            opcion = input("Elija que opción hacer con las peticiones: Ver || Gestion || EXIT\n")
+            if opcion.lower() == "ver":
+                self.ver_peticiones()
+            elif opcion.lower() == "gestion":
+                self.aprob_petic()
+            elif opcion.lower() == "exit":
+                print("Saliendo del menú de gestión de peticiones")
                 return True
             else:
-                print("Escriba una acción válida")
+                print("Escriba una opción válida")
+
+    def ver_peticiones(self, user=None, acc=None):
+        if user:
+            peticiones = self.db.consultar_peticiones_user(user)
+        else:
+            peticiones = self.db.consultar_peticiones()
+        if len(peticiones) == 0:
+            print("No hay peticiones pendientes actualmente")
+        else:
+            print(" ID) TIPO || Username ")
+            for peticion in peticiones:
+                print(peticion[0]+") "+peticion[1]+" - "+peticion[3])
+            while acc:
+                pet_el = input("Seleccione el número de la petición que desea eliminar (Rango 1-"+str(len(peticiones)+1)+"\n")
+                try:
+                    num = int(pet_el)
+                    if num > 0 and num < len(peticiones) + 1:
+                        pet_selec = peticiones[num - 1]
+                        decision_Tomada = False
+                        while not decision_Tomada:
+                            conf = input("Se va a eliminar esta petición, ¿desea continuar? SI || NO \n")
+                            if conf.lower() == "si":
+                                self.db.borrar_peticion(pet_selec[0])
+                                self.recolocar_peticiones()
+                                print("Se ha eliminado la petición correctamente")
+                                return True
+                            elif conf.lower() == "no":
+                                print("Volviendo al menú de selección de user")
+                                return True
+                            else:
+                                print("No has tomado una decisión válida")
+                    else:
+                        print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el " + str(
+                                len(peticiones) + 1) + " según la petición que quieras gestionar")
+                except ValueError:
+                    print("No has introducido un numero")
+
+    def aprob_petic(self):
+        peticiones = self.db.consultar_peticiones()
+        peticiones_confirmadas = self.db.consultar_peticiones_conf()
+        if len(peticiones) == 0:
+            print("No hay peticiones registradas actualmente")
+            return True
+        else:
+            self.ver_peticiones()
+            while True:
+                pet = input("Seleccione la petición que desee gestionar escribiendo un número en el rango 1-"+str(len(peticiones))+"\n")
+                try:
+                    num = int(pet)
+                    if num > 0 and num < len(peticiones) + 1:
+                        pet_selec = peticiones[num - 1]
+                        decision_Tomada = False
+                        while not decision_Tomada:
+                            conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
+                            if conf.lower() == "aceptar":
+                                peticion_conf = pet_selec + ["aceptado"]
+                                peticion_conf[0] = len(peticiones_confirmadas) + 1
+                                self.db.anadir_peticion_confirmada(peticion_conf)
+                                self.db.borrar_peticion(pet_selec[0])
+                                self.recolocar_peticiones()
+                                return True
+                            elif conf.lower() == "rechazar":
+                                print("Volviendo al menú de selección de user")
+                                peticion_conf = pet_selec + ["rechazado"]
+                                peticion_conf[0] = len(peticiones_confirmadas) + 1
+                                self.db.anadir_peticion_confirmada(peticion_conf)
+                                self.db.borrar_peticion(pet_selec[0])
+                                self.recolocar_peticiones()
+                                return True
+                            else:
+                                print("No has tomado una decisión válida")
+                    else:
+                        print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el "+str(len(peticiones)+1)+" según la petición que quieras gestionar")
+                except ValueError:
+                    print("No has introducido un numero")
+
+    def mostrar_peticiones_user(self, user_accedido):
+        peticiones = self.db.consultar_peticiones_user(user_accedido)
+        if len(peticiones) > 0:
+            print("-> Todavía tienes peticiones pendientes de aprobar, estarán en poco tiempo")
+        peticiones_conf = self.db.consultar_peticiones_conf_user(user_accedido)
+        if len(peticiones_conf) > 0:
+            print("Estado de tus peticiones comprobadas:")
+            for peticion in peticiones_conf:
+                if peticion[1] == "Rol":
+                    if peticion[5] == "Aceptado":
+                        print("- Se ha "+peticion[5]+" tu petición: obtener rol de Administrador")
+                    elif peticion[5] == "CambioU-A":
+                        print("- Tu rol ha sido actualizado a Administrador")
+                    elif peticion[5] == "CambioA-U":
+                        print("- Tu rol ha sido actualizado a Usuario")
+                elif peticion[1] == "Compra":
+                    print("- Se ha " + peticion[5] + " tu petición: compra de entrada")
+                    if peticion[5] == "aceptado":
+                        entradaid = peticion[3]
+                        datos_entrada = json.loads(base64.b64decode(entradaid).decode('utf-8'))
+                        entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
+                elif peticion[1] == "Devolucion":
+                    print("- Se ha " + peticion[5] + " tu petición: devolución de la entrada")
+                self.db.borrar_peticion_conf(peticion[0])
+            self.recolocar_peticiones_conf()
+
+    def recolocar_peticiones(self):
+        peticiones = self.db.consultar_peticiones()
+        i = 1
+        for peticion in peticiones:
+            self.db.borrar_peticion(peticion[0])
+            peticion[0] = i
+            self.db.anadir_peticion(peticion)
+            i += 1
+    def recolocar_peticiones_conf(self):
+        peticiones_conf = self.db.consultar_peticiones_conf()
+        i = 1
+        for peticion in peticiones_conf:
+            self.db.borrar_peticion_conf(peticion[0])
+            peticion[0] = i
+            self.db.anadir_peticion_confirmada(peticion)
+            i += 1
+
+    def hacer_peticion(self, user_accedido):
+        while True:
+            pet_elegida = input("¿Que petición desea realizar? Rol || Devolucion || EXIT\n")
+            if pet_elegida.lower() == "rol":
+                peticiones_user = self.db.consultar_peticiones_user(user_accedido)
+                for peticion_u in peticiones_user:
+                    if peticion_u[5] == "Rol":
+                        print("Ya se ha hecho una petición de rol con anterioridad, será comprobada pronto")
+                        return True
+                peticiones = self.db.consultar_peticiones()
+                peticion_rol = [len(peticiones)+1, "Rol", None, user_accedido, None]
+                self.db.anadir_peticion(peticion_rol)
+                print("Petición de aumento de rol a Administrador enviada, se atenderá cuanto antes")
+            elif pet_elegida.lower() == "devolucion":
+                self.menu_devolucion(user_accedido)
+            elif pet_elegida.lower() == "exit":
+                return True
+            else:
+                print("Escriba una opción válida")
+
+    def menu_devolucion(self, user_accedido):
+        entradas = self.db.entradas_compradas(user_accedido)
+        self.mostrar_entradas(user_accedido)
+        while True:
+            ent_d = input("Escriba el número de la entrada que desees solicitar la devolución (Número en el rango 1-"+str(len(entradas)+1)+"\n")
+            try:
+                num = int(ent_d)
+                if num > 0 and num < len(entradas) + 1:
+                    ent_selec = entradas[num - 1]
+                    decision_Tomada = False
+                    while not decision_Tomada:
+                        conf = input("Esta a punto de solicitar la devolución de esta entrada, ¿desea continuar? SI || NO \n")
+                        if conf.lower() == "si":
+                            peticiones = self.db.consultar_peticiones_user(user_accedido)
+                            found = False
+                            for peticion in peticiones:
+                                if peticion[1] == "Devolucion" and peticion[2] == ent_selec[0]:
+                                    found = True
+                            if found:
+                                print("Esta petición ya se ha realizado con anterioridad, se atenderá cuanto antes")
+                            else:
+                                self.db.anadir_peticion([len(peticiones)+1, "Devolucion", ent_selec[0], user_accedido, None])
+                                print("La petición de devolución de su entrada se ha realizado, se atenderá cuanto antes")
+                                return True
+                        elif conf.lower() == "no":
+                            return True
+                        else:
+                            print("No has tomado una decisión válida")
+                else:
+                    print(
+                        "El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el " + str(
+                            len(entradas) + 1) + " según la petición que quieras gestionar")
+            except ValueError:
+                print("No has introducido un numero")
+
 
 if __name__ == "__main__":
     term_1 = Terminal()
