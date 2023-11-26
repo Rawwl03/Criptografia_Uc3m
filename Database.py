@@ -53,7 +53,7 @@ class Database:
         creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
                                            "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTRERED(Username))"
         creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username))"
-        creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_CONFIRMADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB, Estado VARCHAR2 NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username)) "
+        creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_CONFIRMADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB,  Estado VARCHAR2 NOT NULL, Firmante VARCHAR2, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username)) "
         creacion_base_cargos = "CREATE TABLE CARGOS(Tarjeta BLOB, Entrada BLOB, FOREIGN KEY(Tarjeta) REFERENCES TARJETAS(Cifrado), PRIMARY KEY(Entrada))"
 
         self.puntero.execute(creacion_base_users_registered)

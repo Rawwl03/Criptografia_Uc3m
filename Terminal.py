@@ -3,10 +3,10 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from users_data.User import User
 from freezegun import freeze_time
-from cryptography.exceptions import InvalidKey
+from cryptography.exceptions import InvalidKey, InvalidSignature
 from users_data.Tarjeta import Tarjeta
 from Database import Database
 from users_data.Entrada import Entrada
@@ -318,9 +318,12 @@ class Terminal:
                         entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[1], asiento[0], user_accedido)
                         long_p = self.db.consultar_peticiones()
                         peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
-                        firma = 1
+                        data = str(peticion[0])+peticion[1]+str(peticion[2].decode('utf-8'))+peticion[3]
+                        firma = self.firmar_datos(data, user_accedido)
+                        firma_cod = base64.b64encode(firma)
+                        peticion.append(firma_cod)
                         self.db.anadir_cargo([tarjeta_db[1], entrada.id])
-                        self.db.anadir_peticion(peticion+[firma])
+                        self.db.anadir_peticion(peticion)
                 else:
                     print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
             elif acc_tarj.upper() == "BORRAR":
@@ -746,8 +749,10 @@ class Terminal:
             time.sleep(0.5)
 
     def menu_sistema(self, user_accedido):
+        global contrasena_user
         print("Selecciona la acción de gestión de sistema que desea realizar")
         if user_accedido == "Sistema":
+            contrasena_user = self.db.contrasena_sys
             while True:
                 accion = input("Usuarios || Peticiones || Entradas || EXIT\n")
                 if accion.lower() == "usuarios":
@@ -992,6 +997,7 @@ class Terminal:
                         entradaid = peticion[3]
                         datos_entrada = json.loads(base64.b64decode(entradaid).decode('utf-8'))
                         entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
+
                 elif peticion[1] == "Devolucion":
                     print("- Se ha " + peticion[5] + " tu petición: devolución de la entrada")
                 self.db.borrar_peticion_conf(peticion[0])
@@ -1024,7 +1030,10 @@ class Terminal:
                         print("Ya se ha hecho una petición de rol con anterioridad, será comprobada pronto")
                         return True
                 peticiones = self.db.consultar_peticiones()
-                peticion_rol = [len(peticiones)+1, "Rol", None, user_accedido, None]
+                peticion_rol = [len(peticiones)+1, "Rol", None, user_accedido]
+                data = str(peticion_rol[0])+peticion_rol[1]+peticion_rol[3]
+                firma = self.firmar_datos(data, user_accedido)
+                peticion_rol.append(firma)
                 self.db.anadir_peticion(peticion_rol)
                 print("Petición de aumento de rol a Administrador enviada, se atenderá cuanto antes")
             elif pet_elegida.lower() == "devolucion":
@@ -1055,7 +1064,11 @@ class Terminal:
                             if found:
                                 print("Esta petición ya se ha realizado con anterioridad, se atenderá cuanto antes")
                             else:
-                                self.db.anadir_peticion([len(peticiones)+1, "Devolucion", ent_selec[0], user_accedido, None])
+                                peticion_devolucion = [len(peticiones)+1, "Devolucion", ent_selec[0], user_accedido]
+                                data = str(peticion_devolucion[0])+peticion_devolucion[1]+peticion_devolucion[2].decode('utf-8')+peticion_devolucion[3]
+                                firma = self.firmar_datos(data, user_accedido)
+                                peticion_devolucion.append(firma)
+                                self.db.anadir_peticion(peticion_devolucion)
                                 print("La petición de devolución de su entrada se ha realizado, se atenderá cuanto antes")
                                 return True
                         elif conf.lower() == "no":
@@ -1068,6 +1081,32 @@ class Terminal:
                             len(entradas) + 1) + " según la petición que quieras gestionar")
             except ValueError:
                 print("No has introducido un numero")
+
+
+    def firmar_datos(self, datos, user_accedido):
+        asim_keys = self.db.consultar_claves_asim(user_accedido)
+        kv = self.cargar_kv(asim_keys[0][2])
+        firma = kv.sign(datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+        return firma
+
+
+    def cargar_kv(self, ruta_pem):
+        global contrasena_user
+        with open(ruta_pem, "rb") as key_file:
+            private_key = serialization.load_pem_private_key(
+                key_file.read(),
+                password=contrasena_user.encode('utf-8'),
+            )
+        return private_key
+
+    def verificacion_firma(self, datos, firma, user_firmante):
+        asim_keys = self.db.consultar_claves_asim(user_firmante)
+        ku = serialization.load_pem_public_key(asim_keys[0][1])
+        try:
+            ku.verify(firma, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+            return True
+        except InvalidSignature:
+            return False
 
 
 if __name__ == "__main__":
