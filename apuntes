@@ -1,0 +1,8 @@
+#hacer firma -> hay que hacer sobre el hash del mensaje, se cifra con clave privada y se descifra con clave pública
+arreglar mostrar asientos
+peticiones y entradas -> terminar
+
+
+
+al hacer una peticion (puede ser de tipo Compra, Devolución y Rol) -> firma el usuario y verifica administrador/sistema || TODAS LAS PETICIONES VAN FIRMADAS
+EN CASO PETICION-TIPO="COMPRA": la entrada si la valida el administrador, la firma y hace una peticion_confirmada donde mete la firma de los datos de la entrada y el firmante, verifica el usuario al acceder

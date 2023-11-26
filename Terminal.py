@@ -758,7 +758,7 @@ class Terminal:
                 if accion.lower() == "usuarios":
                     self.gestion_users(user_accedido)
                 elif accion.lower() == "peticiones":
-                    self.gestionar_peticiones()
+                    self.gestionar_peticiones(user_accedido)
                 elif accion.lower() == "entradas":
                     print("ver entradas")
                 elif accion.lower() == "exit":
@@ -888,13 +888,13 @@ class Terminal:
                                 print("Acción no válida")
                 print("El nombre introducido no corresponde a ningún usuario")
 
-    def gestionar_peticiones(self):
+    def gestionar_peticiones(self, user_accedido):
         while True:
             opcion = input("Elija que opción hacer con las peticiones: Ver || Gestion || EXIT\n")
             if opcion.lower() == "ver":
                 self.ver_peticiones()
             elif opcion.lower() == "gestion":
-                self.aprob_petic()
+                self.aprob_petic(user_accedido)
             elif opcion.lower() == "exit":
                 print("Saliendo del menú de gestión de peticiones")
                 return True
@@ -937,7 +937,7 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un numero")
 
-    def aprob_petic(self):
+    def aprob_petic(self, user_accedido):
         peticiones = self.db.consultar_peticiones()
         peticiones_confirmadas = self.db.consultar_peticiones_conf()
         if len(peticiones) == 0:
