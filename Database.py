@@ -142,8 +142,9 @@ class Database:
         self.base.commit()
 
     def anadir_peticion_confirmada(self, peticion):
-        query = "INSERT INTO PETICIONES_CONFIRMADAS(Id, Tipo, Entrada, Username, FIRMA, Estado) VALUES (?,?,?,?,?,?)"
-        self.puntero.execute(query, (peticion[0], peticion[1], peticion[2], peticion[3], peticion[4], peticion[5]))
+        query = "INSERT INTO PETICIONES_CONFIRMADAS(Id, Tipo, Entrada, Username, FIRMA, Estado, Firmante) VALUES (?,?,?,?,?,?,?)"
+        self.puntero.execute(query, (
+        peticion[0], peticion[1], peticion[2], peticion[3], peticion[4], peticion[5], peticion[6]))
         self.base.commit()
 
     def anadir_cargo(self, cargo):
@@ -313,6 +314,20 @@ class Database:
         self.puntero.execute(query, (salaNum,))
         sala = self.puntero.fetchall()
         return sala
+
+    """Consulta que devuelve las tarjetas que tiene un usuario"""
+    def select_cargo(self, entrada):
+        query = "SELECT * FROM CARGOS WHERE Entrada = '"+entrada+"'"
+        self.puntero.execute(query)
+        cargo = self.puntero.fetchall()
+        return cargo
+
+    """Consulta que devuelve las tarjetas que tiene un usuario"""
+    def get_saldo(self, tarjeta):
+        query = "SELECT Saldo FROM TARJETAS WHERE Cifrado = '"+tarjeta+"'"
+        self.puntero.execute(query)
+        saldo = self.puntero.fetchall()
+        return saldo
 
     """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
     Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""

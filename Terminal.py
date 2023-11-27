@@ -996,8 +996,13 @@ class Terminal:
                     if peticion[5] == "aceptado":
                         entradaid = peticion[3]
                         datos_entrada = json.loads(base64.b64decode(entradaid).decode('utf-8'))
-                        entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
-
+                        "una vez se verifica la firma de la entrada se realiza el cargo de la compra a la tarjeta del usuario y se hace efectiva la entrada"
+                        if self.verificacion_firma(entradaid,peticion[4],peticion[6]):
+                            entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
+                            self.db.anadir_entrada(entrada_comprada)
+                            cargo=self.db.select_cargo(entradaid)
+                            saldo_actual=self.db.get_saldo(cargo[0][0])
+                            self.db.actualizar_saldo(cargo[0][0],saldo_actual[0][0]-8)
                 elif peticion[1] == "Devolucion":
                     print("- Se ha " + peticion[5] + " tu petición: devolución de la entrada")
                 self.db.borrar_peticion_conf(peticion[0])
