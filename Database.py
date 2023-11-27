@@ -371,17 +371,19 @@ class Database:
                     asiento_aparece = True
                     disponibilidad.append([asiento[0], asiento[1], "O"])
             for peticion in pets:
-                entrada = json.loads(base64.b64decode(peticion[2]).decode('utf-8'))
-                if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada["pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[1]:
-                    asiento_aparece = True
-                    disponibilidad.append([asiento[0], asiento[1], "O"])
+                if peticion[1] == "Compra":
+                    entrada = json.loads(base64.b64decode(peticion[2]).decode('utf-8'))
+                    if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada["pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[1]:
+                        asiento_aparece = True
+                        disponibilidad.append([asiento[0], asiento[1], "O"])
             for peticion_c in pets_c:
-                entrada = json.loads(base64.b64decode(peticion_c[2]).decode('utf-8'))
-                if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada[
-                    "pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[
-                    1]:
-                    asiento_aparece = True
-                    disponibilidad.append([asiento[0], asiento[1], "O"])
+                if peticion_c[1] == "Compra":
+                    entrada = json.loads(base64.b64decode(peticion_c[2]).decode('utf-8'))
+                    if entrada["sala"] == entrada_selec[0] and entrada["hora"] == entrada_selec[1] and entrada[
+                        "pelicula"] == entrada_selec[2] and asiento[0] == entrada["asiento"] and entrada["fila"] == asiento[
+                        1]:
+                        asiento_aparece = True
+                        disponibilidad.append([asiento[0], asiento[1], "O"])
             if not asiento_aparece:
                     disponibilidad.append([asiento[0], asiento[1], "-"])
         return disponibilidad
