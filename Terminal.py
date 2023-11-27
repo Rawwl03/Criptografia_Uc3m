@@ -973,25 +973,54 @@ class Terminal:
                     if num > 0 and num < len(peticiones) + 1:
                         pet_selec = peticiones[num - 1]
                         decision_Tomada = False
-                        while not decision_Tomada:
-                            conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
-                            if conf.lower() == "aceptar":
-                                peticion_conf = pet_selec + ["aceptado"]
-                                peticion_conf[0] = len(peticiones_confirmadas) + 1
-                                self.db.anadir_peticion_confirmada(peticion_conf)
-                                self.db.borrar_peticion(pet_selec[0])
-                                self.recolocar_peticiones()
-                                return True
-                            elif conf.lower() == "rechazar":
-                                print("Volviendo al menú de selección de user")
-                                peticion_conf = pet_selec + ["rechazado"]
-                                peticion_conf[0] = len(peticiones_confirmadas) + 1
-                                self.db.anadir_peticion_confirmada(peticion_conf)
-                                self.db.borrar_peticion(pet_selec[0])
-                                self.recolocar_peticiones()
-                                return True
-                            else:
-                                print("No has tomado una decisión válida")
+                        if pet_selec[2] is not None:
+                            data = str(pet_selec[0] + pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3])
+                        else:
+                            data = str(pet_selec[0] + pet_selec[1] + pet_selec[3])
+                        if self.verificacion_firma(data,pet_selec[4],pet_selec[3]):
+                            while not decision_Tomada:
+                                conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
+                                if conf.lower() == "aceptar":
+                                    peticion_conf = pet_selec + ["aceptado"]
+                                    peticion_conf[0] = len(peticiones_confirmadas) + 1
+                                    if peticion_conf[2] and peticion_conf[1]=="Compra":
+                                        datos_entrada = json.loads(base64.b64decode(peticion_conf[3]).decode('utf-8'))
+                                        entrada_aprobada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"],
+                                                                   datos_entrada["sala"], datos_entrada["fila"],
+                                                                   datos_entrada["asiento"], user_accedido)
+                                        firma_entrada=self.firmar_datos(str(entrada_aprobada),user_accedido)
+                                        peticion_conf[4]=firma_entrada
+                                        peticion_conf.append(user_accedido)
+                                    else:
+                                        peticion_conf[4] = None
+                                        peticion_conf[6] = None
+                                    self.db.anadir_peticion_confirmada(peticion_conf)
+                                    self.db.borrar_peticion(pet_selec[0])
+                                    self.recolocar_peticiones()
+                                    return True
+                                elif conf.lower() == "rechazar":
+                                    print("Volviendo al menú de selección de user")
+                                    peticion_conf = pet_selec + ["rechazado"]
+                                    peticion_conf[0] = len(peticiones_confirmadas) + 1
+                                    peticion_conf[4]=None
+                                    peticion_conf[6] = None
+                                    self.db.anadir_peticion_confirmada(peticion_conf)
+                                    self.db.borrar_peticion(pet_selec[0])
+                                    self.recolocar_peticiones()
+                                    return True
+                                else:
+                                    print("No has tomado una decisión válida")
+                        else:
+                            print("Esta petición no esta verificada, se procederá e eliminarse")
+                            peticion_conf = pet_selec + ["rechazado"]
+                            peticion_conf[0] = len(peticiones_confirmadas) + 1
+                            peticion_conf[4] = None
+                            peticion_conf[6] = None
+                            self.db.anadir_peticion_confirmada(peticion_conf)
+                            self.db.borrar_peticion(pet_selec[0])
+                            self.recolocar_peticiones()
+                            print("La petición ha sido borrada con éxito")
+                            return False
                     else:
                         print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el "+str(len(peticiones)+1)+" según la petición que quieras gestionar")
                 except ValueError:
@@ -1027,14 +1056,14 @@ class Terminal:
                             tarj_actual = self.db.get_tarjeta(cargo[0][0])
                             if len(tarj_actual) == 0:
                                 user = self.db.existe_user(peticion[4])
-                                if user[4] < 8:
+                                if user[0][4] < 8:
                                     print("La tarjeta con la que se iba a hacer el pago ya no existe, se ha rechazado la compra de la entrada")
                                 else:
-                                    dec = input("La tarjeta con la que se iba a hacer el pago ya no existe, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes "+user[4]+"€)\n")
+                                    dec = input("La tarjeta con la que se iba a hacer el pago ya no existe, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes "+user[0][4]+"€)\n")
                                     dec_correcto = False
                                     while not dec_correcto:
                                         if dec.lower() == "si":
-                                            self.db.actualizar_saldo_user(user_accedido, user[4]-8)
+                                            self.db.actualizar_saldo_user(user_accedido, user[0][4]-8)
                                             self.db.anadir_entrada(entrada_comprada)
                                             print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
                                             dec_correcto = True
@@ -1043,23 +1072,23 @@ class Terminal:
                                         else:
                                             print("No se ha escrito una opción válida")
                             else:
-                                if self.pago(tarj_actual[0][1]):
+                                user = self.db.existe_user(peticion[4])
+                                if tarj_actual[0][4] > 8:
                                     self.db.actualizar_saldo(cargo[0][0], tarj_actual[0][4]-8)
                                     self.db.anadir_entrada(entrada_comprada)
                                     print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu tarjeta)")
                                 else:
-                                    user = self.db.existe_user(peticion[4])
-                                    if user[4] < 8:
+                                    if user[0][4] < 8:
                                         print(
                                             "La tarjeta con la que se iba a hacer el pago no tiene suficiente saldo, se ha rechazado la compra de la entrada")
                                     else:
                                         dec = input(
                                             "La tarjeta con la que se iba a hacer el pago no tiene suficiente saldo, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes " +
-                                            user[4] + "€)\n")
+                                            user[0][4] + "€)\n")
                                         dec_correcto = False
                                         while not dec_correcto:
                                             if dec.lower() == "si":
-                                                self.db.actualizar_saldo_user(user_accedido, user[4] - 8)
+                                                self.db.actualizar_saldo_user(user_accedido, user[0][4] - 8)
                                                 self.db.anadir_entrada(entrada_comprada)
                                                 print(
                                                     "- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
