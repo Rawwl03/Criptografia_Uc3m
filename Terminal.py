@@ -170,24 +170,45 @@ class Terminal:
     """Continuación de sys_inicio tras el acceso de user_accedido, aquí se pretende registrar la acción solicitada entre las 
     disponibles y proceder a realizar esa operación. Hay 4 definidas."""
     def accion_cine(self, user_accedido):
-        salir_sys = False
-        while not salir_sys:
-            print("¿Que acción desea realizar, "+ user_accedido+"?")
-            accion = input("Cartelera || Comprar || Perfil || Peticion || Salir\n")
-            if accion.lower() == "cartelera":
-                self.acc_cartelera(user_accedido)
-            elif accion.lower() == "comprar":
-                self.acc_compra(user_accedido)
-            elif accion.lower() == "perfil":
-                self.acc_perfil(user_accedido)
-            elif accion.lower() == "peticion":
-                self.hacer_peticion(user_accedido)
-            elif accion.lower()=="salir":
-                print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
-                salir_sys = True
-                self.db.cerrar_base()
-            else:
-                print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
+        user = self.db.existe_user(user_accedido)
+        if user[0][3] == "U":
+            salir_sys = False
+            while not salir_sys:
+                print("¿Que acción desea realizar, "+ user_accedido+"?")
+                accion = input("Cartelera || Comprar || Perfil || Peticion || EXIT\n")
+                if accion.lower() == "cartelera":
+                    self.acc_cartelera(user_accedido)
+                elif accion.lower() == "comprar":
+                    self.acc_compra(user_accedido)
+                elif accion.lower() == "perfil":
+                    self.acc_perfil(user_accedido)
+                elif accion.lower() == "peticion":
+                    self.hacer_peticion(user_accedido)
+                elif accion.lower()=="exit":
+                    print("Saliendo del sistema, ¡hasta otra, "+user_accedido+"!")
+                    salir_sys = True
+                    self.db.cerrar_base()
+                else:
+                    print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
+        elif user[0][3] == "A":
+            salir_sys = False
+            while not salir_sys:
+                print("¿Que acción desea realizar, " + user_accedido + "?")
+                accion = input("Cartelera || Comprar || Perfil || Devolucion || EXIT\n")
+                if accion.lower() == "cartelera":
+                    self.acc_cartelera(user_accedido)
+                elif accion.lower() == "comprar":
+                    self.acc_compra(user_accedido)
+                elif accion.lower() == "perfil":
+                    self.acc_perfil(user_accedido)
+                elif accion.lower() == "devolucion":
+                    self.menu_devolucion(user_accedido)
+                elif accion.lower() == "exit":
+                    print("Saliendo del sistema, ¡hasta otra, " + user_accedido + "!")
+                    salir_sys = True
+                    self.db.cerrar_base()
+                else:
+                    print("Acción no válida en el sistema, introduzca de nuevo la acción correctamente")
 
     """La función se encarga de mostrar las películas que hay disponibles para ver, y además puede mostrar inforación adicional
     sobre la película deseada en cuanto a sus horarios disponibles o información adicional."""
@@ -760,7 +781,7 @@ class Terminal:
                 elif accion.lower() == "peticiones":
                     self.gestionar_peticiones(user_accedido)
                 elif accion.lower() == "entradas":
-                    print("ver entradas")
+                    self.gestionar_entradas(user_accedido)
                 elif accion.lower() == "exit":
                     print("Saliendo del menú de sistema")
                     return True
@@ -986,25 +1007,83 @@ class Terminal:
             for peticion in peticiones_conf:
                 if peticion[1] == "Rol":
                     if peticion[5] == "Aceptado":
+                        self.db.actualizar_rol_user(user_accedido, "A")
                         print("- Se ha "+peticion[5]+" tu petición: obtener rol de Administrador")
                     elif peticion[5] == "CambioU-A":
+                        self.db.actualizar_rol_user(user_accedido, "A")
                         print("- Tu rol ha sido actualizado a Administrador")
                     elif peticion[5] == "CambioA-U":
+                        self.db.actualizar_rol_user(user_accedido, "U")
                         print("- Tu rol ha sido actualizado a Usuario")
+                    else:
+                        print("- Se ha rechazado tu petición: aumento de rol")
                 elif peticion[1] == "Compra":
-                    print("- Se ha " + peticion[5] + " tu petición: compra de entrada")
-                    if peticion[5] == "aceptado":
-                        entradaid = peticion[3]
-                        datos_entrada = json.loads(base64.b64decode(entradaid).decode('utf-8'))
+                    if peticion[5] == "Aceptado":
+                        datos_entrada = json.loads(base64.b64decode(peticion[3]).decode('utf-8'))
+                        entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
                         "una vez se verifica la firma de la entrada se realiza el cargo de la compra a la tarjeta del usuario y se hace efectiva la entrada"
-                        if self.verificacion_firma(entradaid,peticion[4],peticion[6]):
-                            entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
-                            self.db.anadir_entrada(entrada_comprada)
-                            cargo=self.db.select_cargo(entradaid)
-                            saldo_actual=self.db.get_saldo(cargo[0][0])
-                            self.db.actualizar_saldo(cargo[0][0],saldo_actual[0][0]-8)
+                        if self.verificacion_firma(entrada_comprada.__str__(), peticion[4], peticion[6]):
+                            cargo = self.db.select_cargo(entrada_comprada.id)
+                            tarj_actual = self.db.get_tarjeta(cargo[0][0])
+                            if len(tarj_actual) == 0:
+                                user = self.db.existe_user(peticion[4])
+                                if user[4] < 8:
+                                    print("La tarjeta con la que se iba a hacer el pago ya no existe, se ha rechazado la compra de la entrada")
+                                else:
+                                    dec = input("La tarjeta con la que se iba a hacer el pago ya no existe, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes "+user[4]+"€)\n")
+                                    dec_correcto = False
+                                    while not dec_correcto:
+                                        if dec.lower() == "si":
+                                            self.db.actualizar_saldo_user(user_accedido, user[4]-8)
+                                            self.db.anadir_entrada(entrada_comprada)
+                                            print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
+                                            dec_correcto = True
+                                        elif dec.lower() == "no":
+                                            print("- Se ha rechazado tu petición: compra de entrada")
+                                        else:
+                                            print("No se ha escrito una opción válida")
+                            else:
+                                if self.pago(tarj_actual[0][1]):
+                                    self.db.actualizar_saldo(cargo[0][0], tarj_actual[0][4]-8)
+                                    self.db.anadir_entrada(entrada_comprada)
+                                    print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu tarjeta)")
+                                else:
+                                    user = self.db.existe_user(peticion[4])
+                                    if user[4] < 8:
+                                        print(
+                                            "La tarjeta con la que se iba a hacer el pago no tiene suficiente saldo, se ha rechazado la compra de la entrada")
+                                    else:
+                                        dec = input(
+                                            "La tarjeta con la que se iba a hacer el pago no tiene suficiente saldo, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes " +
+                                            user[4] + "€)\n")
+                                        dec_correcto = False
+                                        while not dec_correcto:
+                                            if dec.lower() == "si":
+                                                self.db.actualizar_saldo_user(user_accedido, user[4] - 8)
+                                                self.db.anadir_entrada(entrada_comprada)
+                                                print(
+                                                    "- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
+                                                dec_correcto = True
+                                            elif dec.lower() == "no":
+                                                print("- Se ha rechazado tu petición: compra de entrada")
+                                            else:
+                                                print("No se ha escrito una opción válida")
+                    else:
+                        print("- Se ha rechazado tu petición: compra de entrada")
+                    self.db.borrar_cargo(peticion[3])
                 elif peticion[1] == "Devolucion":
-                    print("- Se ha " + peticion[5] + " tu petición: devolución de la entrada")
+                    if peticion[5] == "Aceptado":
+                        user = self.db.existe_user(peticion[4])
+                        self.db.borrar_entrada(peticion[2])
+                        self.db.actualizar_saldo_user(user[0][0], user[0][4] + 8)
+                        print("- Se ha aceptado tu petición: devolución de la entrada. +8€ en tu cuenta")
+                    elif peticion[5] == "Retirada":
+                        user = self.db.existe_user(peticion[4])
+                        self.db.borrar_entrada(peticion[2])
+                        self.db.actualizar_saldo_user(user[0][0], user[0][4] + 8)
+                        print("- Se ha retirado una de tus entradas. +8€ en tu cuenta")
+                    else:
+                        print("- Se ha rechazado tu petición: devolución de la entrada.")
                 self.db.borrar_peticion_conf(peticion[0])
             self.recolocar_peticiones_conf()
 
@@ -1074,7 +1153,7 @@ class Terminal:
                                 firma = self.firmar_datos(data, user_accedido)
                                 peticion_devolucion.append(firma)
                                 self.db.anadir_peticion(peticion_devolucion)
-                                print("La petición de devolución de su entrada se ha realizado, se atenderá cuanto antes")
+                                print("La petición de devolución de su entrada ha sido realizada, se atenderá cuanto antes")
                                 return True
                         elif conf.lower() == "no":
                             return True
@@ -1086,6 +1165,67 @@ class Terminal:
                             len(entradas) + 1) + " según la petición que quieras gestionar")
             except ValueError:
                 print("No has introducido un numero")
+
+    def gestionar_entradas(self, user_accedido):
+        while True:
+            opcion = input("Elija que opción hacer con las peticiones: Ver || Eliminar || EXIT\n")
+            if opcion.lower() == "ver":
+                self.ver_entradas()
+            elif opcion.lower() == "eliminar":
+                self.eliminar_entradas(user_accedido)
+            elif opcion.lower() == "exit":
+                print("Saliendo del menú de gestión de entradas")
+                return True
+            else:
+                print("Escriba una opción válida")
+
+    def ver_entradas(self):
+        entradas = self.db.consultar_entradas()
+        print("Hay un total de "+str(len(entradas)+1)+" entradas compradas\n\n")
+        for i in range(0, entradas):
+            entrada = Entrada(entradas[i][0], entradas[i][1], entradas[i][2], entradas[i][3], entradas[i][4], entradas[i][5])
+            print(str(i+1)+") "+entrada.__str__())
+
+    def eliminar_entradas(self, user_accedido):
+        entradas = self.db.consultar_entradas()
+        self.ver_entradas()
+        pet = input("Seleccione la entrada que desee eliminar escribiendo un número en el rango 1-" + str(
+            len(entradas)) + "\n")
+        try:
+            num = int(pet)
+            if num > 0 and num < len(entradas) + 1:
+                ent_selec = entradas[num - 1]
+                decision_Tomada = False
+                while not decision_Tomada:
+                    conf = input("¿Desea eliminar esta entrada? SI || NO\n")
+                    if conf.lower() == "si":
+                        peticiones_conf = self.db.consultar_peticiones_conf()
+                        peticiones_conf_user = self.db.consultar_peticiones_conf_user(ent_selec[6])
+                        found = False
+                        for peticion in peticiones_conf_user:
+                            if peticion[1] == "Devolucion" and peticion[2] == ent_selec[0]:
+                                found = True
+                        if not found:
+                            peticion_conf = [len(peticiones_conf) + 1, "Devolucion", ent_selec[0], ent_selec[6], None, "Retirada", ]
+                            self.db.anadir_peticion_confirmada(peticion_conf)
+                        else:
+                            print("Esta entrada ya se ha devuelto en una petición")
+                        peticiones_user = self.db.consultar_peticiones_user(ent_selec[6])
+                        for peticion in peticiones_user:
+                            if peticion[1] == "Devolucion" and peticion[2] == ent_selec[0]:
+                                self.db.borrar_peticion(peticion[0])
+                                self.recolocar_peticiones()
+                        return True
+                    elif conf.lower() == "no":
+                        print("Volviendo al menú de gestión de entradas")
+                        return True
+                    else:
+                        print("No has tomado una decisión válida")
+            else:
+                print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el " + str(
+                    len(entradas) + 1) + " según la petición que quieras gestionar")
+        except ValueError:
+            print("No has introducido un numero")
 
 
     def firmar_datos(self, datos, user_accedido):

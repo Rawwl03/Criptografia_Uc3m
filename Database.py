@@ -323,11 +323,30 @@ class Database:
         return cargo
 
     """Consulta que devuelve las tarjetas que tiene un usuario"""
-    def get_saldo(self, tarjeta):
-        query = "SELECT Saldo FROM TARJETAS WHERE Cifrado = '"+tarjeta+"'"
+    def get_tarjeta(self, tarjeta):
+        query = "SELECT * FROM TARJETAS WHERE Cifrado = '"+tarjeta+"'"
         self.puntero.execute(query)
-        saldo = self.puntero.fetchall()
-        return saldo
+        tarj = self.puntero.fetchall()
+        return tarj
+
+    def gestionar_entradas(self, user_accedido):
+        while True:
+            opcion = input("Elija que opción hacer con las peticiones: Ver || Eliminar || EXIT\n")
+            if opcion.lower() == "ver":
+                self.ver_entradas()
+            elif opcion.lower() == "eliminar":
+                self.eliminar_entradas(user_accedido)
+            elif opcion.lower() == "exit":
+                print("Saliendo del menú de gestión de entradas")
+                return True
+            else:
+                print("Escriba una opción válida")
+
+    def consultar_entradas(self):
+        query = "SELECT * FROM ENTRADAS ORDER BY Pelicula, Hora"
+        self.puntero.execute(query)
+        entradas = self.puntero.fetchall()
+        return entradas
 
     """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
     Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""
@@ -424,6 +443,11 @@ class Database:
         self.puntero.execute(query, (entradaID,))
         self.base.commit()
 
+    def borrar_cargo(self, entradaID):
+        query = "DELETE FROM CARGOS WHERE Entrada = ?"
+        self.puntero.execute(query, (entradaID,))
+        self.base.commit()
+
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
         query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ?, Salt = ? WHERE Username = ?"
@@ -439,6 +463,11 @@ class Database:
     def actualizar_rol_user(self, user, nuevo_rol):
         query = "UPDATE USERS_REGISTERED SET Rol = ? WHERE Username = ?"
         self.puntero.execute(query, (nuevo_rol, user))
+        self.base.commit()
+
+    def actualizar_saldo_user(self, username, nuevo_saldo):
+        query = "UPDATE USERS_REGISTERED SET Saldo = ? WHERE Username = ?"
+        self.puntero.execute(query, (nuevo_saldo, username))
         self.base.commit()
 
     """Aquí vamos a crear las claves asimétricas del sistema, para poder firmar desde el programa. Se hace aquí porque

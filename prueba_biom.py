@@ -13,9 +13,9 @@ class Entrada:
         self.fila = fila
         self.asiento = asiento
         self.cliente = cliente
-        self.id = self.__str__()
+        self.id = self.id_obtener()
 
-    def __str__(self):
+    def id_obtener(self):
         return base64.b64encode(json.dumps(self.__dict__).encode('utf-8'))
 
 
@@ -82,7 +82,5 @@ def generar_asimethric_keys():
 
 
 if __name__=="__main__":
-    a = None
-    b = [1]
-    c = a+str(b[0])
-    print(c)
+    entrada = Entrada("Superman", "10", 1, 2, 3, "Jesus")
+    print()
