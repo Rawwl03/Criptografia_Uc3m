@@ -533,18 +533,19 @@ class Terminal:
     si el usuario desea salir del menú de selección de asiento."""
     def seleccion_asiento(self, entrada_selec):
         print("Estos son todos los asientos disponibles para la película '"+ entrada_selec[2]+"' a las "+entrada_selec[1])
-        print("\t\t---Sala " + str(entrada_selec[0]) + "---\n")
+        print("---Sala " + str(entrada_selec[0]) + "---\n")
         asientos = self.db.asientos_disponibles(entrada_selec)
         asientos_dispo = []
         for asiento in asientos:
             if asiento[2] == "-":
                 asientos_dispo.append(asiento)
+            print(asiento[2])
         datos_sala = self.db.num_sala(entrada_selec[0])
         print("\t\t\t\t\t\t\t\t\t(Pantalla)\n")
         for i in range(0, datos_sala[0][1]):
             print("-> Fila "+str(i+1)+"\t\t", end=" ")
             for j in range(0, datos_sala[0][2]):
-                print(asientos[j+i*datos_sala[0][1]][2], end="  ")
+                print(asientos[j+i*datos_sala[0][2]][2], end="  ")
             print("\n")
         print("Nº Asiento:", end="\t\t ")
         for i in range(0, datos_sala[0][2]):
@@ -761,7 +762,7 @@ class Terminal:
             print(user_accedido + ", ha comprado un total de " + str(
                 len(entradas)) + " entradas. Tus entradas son las siguientes:")
             for i in range(0, len(entradas)):
-                print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][0]+", Hora: "+entradas[i][1]+", Sala: "+str(entradas[i][2])+", Fila: "+str(entradas[i][3])+", Asiento: "+str(entradas[i][4]))
+                print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][1]+", Hora: "+entradas[i][2]+", Sala: "+str(entradas[i][3])+", Fila: "+str(entradas[i][4])+", Asiento: "+str(entradas[i][5]))
 
     def generar_asimethric_keys(self, user_accedido):
         global contrasena_user
@@ -831,7 +832,7 @@ class Terminal:
                 elif accion.lower() == "peticiones":
                     self.gestionar_peticiones(user_accedido)
                 elif accion.lower() == "entradas":
-                    self.gestionar_entradas(user_accedido)
+                    self.gestionar_entradas()
                 elif accion.lower() == "exit":
                     print("Saliendo del menú de sistema")
                     return True
@@ -1043,10 +1044,10 @@ class Terminal:
                             while not decision_Tomada:
                                 conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
                                 if conf.lower() == "aceptar":
-                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Aceptado", None]
+                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Aceptado"]
                                     peticion_conf[0] = len(peticiones_confirmadas) + 1
                                     if peticion_conf[1] == "Compra":
-                                        datos_entrada = json.loads(base64.b64decode(peticion_conf[3]).decode('utf-8'))
+                                        datos_entrada = json.loads(base64.b64decode(peticion_conf[2]).decode('utf-8'))
                                         entrada_aprobada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"],
                                                                    datos_entrada["sala"], datos_entrada["fila"],
                                                                    datos_entrada["asiento"], pet_selec[3])
@@ -1106,7 +1107,7 @@ class Terminal:
                         print("- Se ha rechazado tu petición: aumento de rol")
                 elif peticion[1] == "Compra":
                     if peticion[5] == "Aceptado":
-                        datos_entrada = json.loads(base64.b64decode(peticion[3]).decode('utf-8'))
+                        datos_entrada = json.loads(base64.b64decode(peticion[2]).decode('utf-8'))
                         entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
                         "una vez se verifica la firma de la entrada se realiza el cargo de la compra a la tarjeta del usuario y se hace efectiva la entrada"
                         if self.verificacion_firma(entrada_comprada.__str__(), peticion[4], peticion[6], user_accedido):
@@ -1123,6 +1124,7 @@ class Terminal:
                                         if dec.lower() == "si":
                                             self.db.actualizar_saldo_user(user_accedido, user[0][4]-8)
                                             self.db.anadir_entrada(entrada_comprada)
+                                            self.db.borrar_cargo(entrada_comprada.id)
                                             print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
                                             dec_correcto = True
                                         elif dec.lower() == "no":
@@ -1134,6 +1136,7 @@ class Terminal:
                                 if tarj_actual[0][4] > 8:
                                     self.db.actualizar_saldo(cargo[0][0], tarj_actual[0][4]-8)
                                     self.db.anadir_entrada(entrada_comprada)
+                                    self.db.borrar_cargo(entrada_comprada.id)
                                     print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu tarjeta)")
                                 else:
                                     if user[0][4] < 8:
@@ -1148,6 +1151,7 @@ class Terminal:
                                             if dec.lower() == "si":
                                                 self.db.actualizar_saldo_user(user_accedido, user[0][4] - 8)
                                                 self.db.anadir_entrada(entrada_comprada)
+                                                self.db.borrar_cargo(entrada_comprada.id)
                                                 print(
                                                     "- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
                                                 dec_correcto = True
@@ -1252,17 +1256,17 @@ class Terminal:
                     else:
                         print(
                             "El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el " + str(
-                                len(entradas) + 1) + " según la petición que quieras gestionar")
+                                len(entradas)) + " según la petición que quieras gestionar")
                 except ValueError:
                     print("No has introducido un numero")
 
-    def gestionar_entradas(self, user_accedido):
+    def gestionar_entradas(self):
         while True:
             opcion = input("Elija que opción hacer con las entradas: Ver || Eliminar || EXIT\n")
             if opcion.lower() == "ver":
                 self.ver_entradas()
             elif opcion.lower() == "eliminar":
-                self.eliminar_entradas(user_accedido)
+                self.eliminar_entradas()
             elif opcion.lower() == "exit":
                 print("Saliendo del menú de gestión de entradas")
                 return True
@@ -1273,10 +1277,10 @@ class Terminal:
         entradas = self.db.consultar_entradas()
         print("Hay un total de "+str(len(entradas))+" entradas compradas\n\n")
         for i in range(0, len(entradas)):
-            entrada = Entrada(entradas[i][0], entradas[i][1], entradas[i][2], entradas[i][3], entradas[i][4], entradas[i][5])
+            entrada = Entrada(entradas[i][1], entradas[i][2], entradas[i][3], entradas[i][4], entradas[i][5], entradas[i][6])
             print(str(i+1)+") "+entrada.__str__())
 
-    def eliminar_entradas(self, user_accedido):
+    def eliminar_entradas(self):
         entradas = self.db.consultar_entradas()
         self.ver_entradas()
         pet = input("Seleccione la entrada que desee eliminar escribiendo un número en el rango 1-" + str(
@@ -1290,17 +1294,17 @@ class Terminal:
                     conf = input("¿Desea eliminar esta entrada? SI || NO\n")
                     if conf.lower() == "si":
                         peticiones_conf = self.db.consultar_peticiones_conf()
-                        peticiones_conf_user = self.db.consultar_peticiones_conf_user(user_accedido)
+                        peticiones_conf_user = self.db.consultar_peticiones_conf_user(ent_selec[6])
                         found = False
                         for peticion in peticiones_conf_user:
-                            if peticion[1] == "Devolucion" and peticion[2] == user_accedido:
+                            if peticion[1] == "Devolucion" and peticion[2] == ent_selec[0]:
                                 found = True
                         if not found:
-                            peticion_conf = [len(peticiones_conf) + 1, "Devolucion", ent_selec[0], user_accedido, None, "Retirada", ]
+                            peticion_conf = [len(peticiones_conf) + 1, "Devolucion", ent_selec[0], ent_selec[6], None, "Retirada", None]
                             self.db.anadir_peticion_confirmada(peticion_conf)
                         else:
                             print("Esta entrada ya se ha devuelto en una petición")
-                        peticiones_user = self.db.consultar_peticiones_user(user_accedido)
+                        peticiones_user = self.db.consultar_peticiones_user(ent_selec[6])
                         for peticion in peticiones_user:
                             if peticion[1] == "Devolucion" and peticion[2] == ent_selec[0]:
                                 self.db.borrar_peticion(peticion[0])
@@ -1313,7 +1317,7 @@ class Terminal:
                         print("No has tomado una decisión válida")
             else:
                 print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el " + str(
-                    len(entradas) + 1) + " según la petición que quieras gestionar")
+                    len(entradas)) + " según la petición que quieras gestionar")
         except ValueError:
             print("No has introducido un numero")
 
@@ -1342,7 +1346,7 @@ class Terminal:
         ku = serialization.load_pem_public_key(asim_keys[0][1])
         firma_bin = base64.b64decode(firma)
         try:
-            ku.verify(firma_bin, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+            ku.verify(firma_bin, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
             datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "Válido"]
             self.db.anadir_log_firma(datos_log)
             return True

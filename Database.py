@@ -274,8 +274,8 @@ class Database:
 
     """Consulta que devuelve un usuario y sus datos si este está registrado en la base de datos"""
     def existe_user(self, username):
-        query = "SELECT * FROM USERS_REGISTERED WHERE Username = '"+username+"'"
-        self.puntero.execute(query)
+        query = "SELECT * FROM USERS_REGISTERED WHERE Username = ?"
+        self.puntero.execute(query, (username,))
         user = self.puntero.fetchall()
         return user
 
@@ -294,15 +294,15 @@ class Database:
 
     """Consulta que devuelve las tarjetas que tiene un usuario"""
     def select_tarjetas(self, username):
-        query = "SELECT * FROM TARJETAS WHERE Propietario = '"+username+"'"
-        self.puntero.execute(query)
+        query = "SELECT * FROM TARJETAS WHERE Propietario = ?"
+        self.puntero.execute(query, (username,))
         tarjetas = self.puntero.fetchall()
         return tarjetas
 
     """Consulta que devuelve los horarios disponibles para una película en concreto"""
     def horarios_peli(self, pelicula):
-        query = "SELECT * FROM HORARIO WHERE Pelicula = '"+pelicula[0]+"'"
-        self.puntero.execute(query)
+        query = "SELECT * FROM HORARIO WHERE Pelicula = ?"
+        self.puntero.execute(query, (pelicula[0],))
         horarios_peli_selec = self.puntero.fetchall()
         return horarios_peli_selec
 
@@ -328,15 +328,15 @@ class Database:
 
     """Consulta que devuelve las tarjetas que tiene un usuario"""
     def select_cargo(self, entrada):
-        query = "SELECT * FROM CARGOS WHERE Entrada = '"+entrada+"'"
-        self.puntero.execute(query)
+        query = "SELECT * FROM CARGOS WHERE Entrada = ?"
+        self.puntero.execute(query, (entrada,))
         cargo = self.puntero.fetchall()
         return cargo
 
     """Consulta que devuelve las tarjetas que tiene un usuario"""
     def get_tarjeta(self, tarjeta):
-        query = "SELECT * FROM TARJETAS WHERE Cifrado = '"+tarjeta+"'"
-        self.puntero.execute(query)
+        query = "SELECT * FROM TARJETAS WHERE Cifrado = ?"
+        self.puntero.execute(query, (tarjeta,))
         tarj = self.puntero.fetchall()
         return tarj
 
