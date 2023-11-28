@@ -342,7 +342,7 @@ class Terminal:
                                               asiento[1], asiento[0], user_accedido)
                             long_p = self.db.consultar_peticiones()
                             peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
-                            data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                            data = peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
                                 3]
                             firma = self.firmar_datos(data, user_accedido)
                             peticion.append(firma)
@@ -361,7 +361,7 @@ class Terminal:
                                                       asiento[1], asiento[0], user_accedido)
                                     long_p = self.db.consultar_peticiones()
                                     peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
-                                    data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                                    data = peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
                                         3]
                                     firma = self.firmar_datos(data, user_accedido)
                                     peticion.append(firma)
@@ -385,7 +385,7 @@ class Terminal:
                                               asiento[1], asiento[0], user_accedido)
                             long_p = self.db.consultar_peticiones()
                             peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
-                            data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                            data = peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
                                 3]
                             firma = self.firmar_datos(data, user_accedido)
                             peticion.append(firma)
@@ -1035,9 +1035,9 @@ class Terminal:
                     if num > 0 and num < len(peticiones) + 1:
                         pet_selec = peticiones[num - 1]
                         if pet_selec[2] is not None:
-                            data = str(pet_selec[0]) + pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3]
+                            data = pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3]
                         else:
-                            data = str(pet_selec[0]) + pet_selec[1] + pet_selec[3]
+                            data = pet_selec[1] + pet_selec[3]
                         if self.verificacion_firma(data, pet_selec[4], pet_selec[3], user_accedido):
                             decision_Tomada = False
                             while not decision_Tomada:
@@ -1204,7 +1204,7 @@ class Terminal:
                         return True
                 peticiones = self.db.consultar_peticiones()
                 peticion_rol = [len(peticiones)+1, "Rol", None, user_accedido]
-                data = str(peticion_rol[0])+peticion_rol[1]+peticion_rol[3]
+                data = peticion_rol[1]+peticion_rol[3]
                 firma = self.firmar_datos(data, user_accedido)
                 peticion_rol.append(firma)
                 self.db.anadir_peticion(peticion_rol)
@@ -1239,7 +1239,7 @@ class Terminal:
                                     print("Esta petición ya se ha realizado con anterioridad, se atenderá cuanto antes")
                                 else:
                                     peticion_devolucion = [len(peticiones)+1, "Devolucion", ent_selec[0], user_accedido]
-                                    data = str(peticion_devolucion[0])+peticion_devolucion[1]+peticion_devolucion[2].decode('utf-8')+peticion_devolucion[3]
+                                    data = peticion_devolucion[1]+peticion_devolucion[2].decode('utf-8')+peticion_devolucion[3]
                                     firma = self.firmar_datos(data, user_accedido)
                                     peticion_devolucion.append(firma)
                                     self.db.anadir_peticion(peticion_devolucion)

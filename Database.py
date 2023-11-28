@@ -340,19 +340,6 @@ class Database:
         tarj = self.puntero.fetchall()
         return tarj
 
-    def gestionar_entradas(self, user_accedido):
-        while True:
-            opcion = input("Elija que opción hacer con las peticiones: Ver || Eliminar || EXIT\n")
-            if opcion.lower() == "ver":
-                self.ver_entradas()
-            elif opcion.lower() == "eliminar":
-                self.eliminar_entradas(user_accedido)
-            elif opcion.lower() == "exit":
-                print("Saliendo del menú de gestión de entradas")
-                return True
-            else:
-                print("Escriba una opción válida")
-
     def consultar_entradas(self):
         query = "SELECT * FROM ENTRADAS ORDER BY Pelicula, Hora"
         self.puntero.execute(query)
