@@ -39,8 +39,9 @@ class Database:
         creacion_base_users_registered = "CREATE TABLE USERS_REGISTERED (Username VARCHAR2, Hash_contraseña BLOB NOT NULL, Salt BLOB NOT NULL, Rol VARCHAR2 NOT NULL, Saldo INT(3) NOT NULL," \
                                  " PRIMARY KEY(Username))"
         creacion_base_log_cif ="CREATE TABLE LOG_CIFRADO_SIM (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL," \
-                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username), PRIMARY KEY(ID))"
-        creacion_base_log_firma = "CREATE TABLE LOG_FIRMA (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL)"
+                                 " Usuario VARCHAR2 NOT NULL, Data VARCHAR2 NOT NULL, Cypher BLOB NOT NULL, Key_used BLOB NOT NULL, PRIMARY KEY(ID))"
+        creacion_base_log_firma = "CREATE TABLE LOG_FIRMA (ID INTEGER, Tipo VARCHAR2 NOT NULL, Hora CHAR(5) NOT NULL, Fecha CHAR(10) NOT NULL, " \
+                                  "Data VARCHAR2 NOT NULL, Firma BLOB NOT NULL, Ku_used BLOB, Kv_used VARCHAR2, User VARCHAR2 NOT NULL, Estado_verificación VARCHAR2, PRIMARY KEY(ID))"
         creacion_base_horario = "CREATE TABLE HORARIO (Sala INT(2), Hora CHAR(2) NOT NULL, Pelicula VARCHAR2, PRIMARY KEY(" \
                                 "Sala, Hora, Pelicula), FOREIGN KEY (Pelicula) REFERENCES CARTELERA(Pelicula), FOREIGN KEY(Sala) REFERENCES SALAS(Sala))"
         creacion_base_peliculas = "CREATE TABLE CARTELERA (Pelicula VARCHAR2, Duracion INT(3) NOT NULL, " \
@@ -51,15 +52,15 @@ class Database:
         creacion_base_asientos = "CREATE TABLE ASIENTOS (Asiento INT(3), Fila INT(2), Sala INT(1), PRIMARY KEY(" \
                                  "Asiento, Fila, Sala), FOREIGN KEY(Fila) REFERENCES FILAS(Asiento), FOREIGN KEY(Sala) REFERENCES SALAS(ID))"
         creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
-                                           "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTRERED(Username))"
+                                           "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_CONFIRMADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB,  Estado VARCHAR2 NOT NULL, Firmante VARCHAR2, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username)) "
-        creacion_base_cargos = "CREATE TABLE CARGOS(Tarjeta BLOB, Entrada BLOB, FOREIGN KEY(Tarjeta) REFERENCES TARJETAS(Cifrado), PRIMARY KEY(Entrada))"
+        creacion_base_cargos = "CREATE TABLE CARGOS(Tarjeta BLOB, Entrada BLOB, PRIMARY KEY(Entrada))"
 
         self.puntero.execute(creacion_base_users_registered)
         self.puntero.execute(creacion_base_tarjetas)
         self.puntero.execute(creacion_base_log_cif)
-        #self.puntero.execute(creacion_base_log_firma)
+        self.puntero.execute(creacion_base_log_firma)
         self.puntero.execute(creacion_base_peliculas)
         self.puntero.execute(creacion_base_salas)
         self.puntero.execute(creacion_base_filas)
@@ -132,9 +133,13 @@ class Database:
         self.puntero.execute(query, (datos[0], datos[1], datos[2]))
         self.base.commit()
 
-    """def anadir_log_firma(self, datos):
-        query = "INSERT INTO LOG_FIRMA ()"
-    """
+    def anadir_log_firma(self, datos):
+        num = self.numero_logs_firma() + 1
+        hora, fecha = self.hora_fecha_actual()
+        query = "INSERT INTO LOG_FIRMA (ID , Tipo , Hora , Fecha , Data , Firma , Ku_used , Kv_used , User , Estado_verificación) VALUES (?,?,?,?,?,?,?,?,?,?)"
+        self.puntero.execute(query, (num, datos[0], hora, fecha, datos[1], datos[2], datos[3], datos[4], datos[5], datos[6]))
+        self.base.commit()
+
 
     def anadir_peticion(self, peticion):
         query = "INSERT INTO PETICIONES(Id, Tipo, Entrada, Username, FIRMA) VALUES (?,?,?,?,?)"
@@ -280,6 +285,12 @@ class Database:
         self.puntero.execute(query)
         logs = self.puntero.fetchall()
         return len(logs)
+
+    def numero_logs_firma(self):
+        query = "SELECT * FROM LOG_FIRMA"
+        self.puntero.execute(query)
+        logs_firma = self.puntero.fetchall()
+        return len(logs_firma)
 
     """Consulta que devuelve las tarjetas que tiene un usuario"""
     def select_tarjetas(self, username):
@@ -448,6 +459,11 @@ class Database:
     def borrar_cargo(self, entradaID):
         query = "DELETE FROM CARGOS WHERE Entrada = ?"
         self.puntero.execute(query, (entradaID,))
+        self.base.commit()
+
+    def borrar_asym_keys(self, username):
+        query = "DELETE FROM ASYMETHRIC_KEYS WHERE Usuario = ?"
+        self.puntero.execute(query, (username,))
         self.base.commit()
 
     """Para cuando se haga la rotación de claves"""

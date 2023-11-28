@@ -329,24 +329,70 @@ class Terminal:
             if acc_tarj.upper() == "GUARDAR":
                 self.cifrado_tarjeta(user_accedido)
             elif acc_tarj.upper() == "SELECCIONAR":
-                tarjeta_db = self.validar_tarjeta(user_accedido)
-                if tarjeta_db:
-                    saldo_tarj = tarjeta_db[4]
-                    if saldo_tarj < 8:
-                        print("Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
-                    else:
-                        pago = True
-                        entrada = Entrada(peli_selec[0], entradas[id-1][1], entradas[id-1][0], asiento[1], asiento[0], user_accedido)
-                        long_p = self.db.consultar_peticiones()
-                        peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
-                        data = str(peticion[0])+peticion[1]+str(peticion[2].decode('utf-8'))+peticion[3]
-                        firma = self.firmar_datos(data, user_accedido)
-                        firma_cod = base64.b64encode(firma)
-                        peticion.append(firma_cod)
-                        self.db.anadir_cargo([tarjeta_db[1], entrada.id])
-                        self.db.anadir_peticion(peticion)
+                user = self.db.existe_user(user_accedido)
+                print("Usted tiene "+str(user[0][4])+"€ en la cuenta")
+                if user[0][4] >= 8:
+                    decision = False
+                    while not decision:
+                        dec = input("¿Desea pagar con tu saldo o con la tarjeta? Saldo || Tarjeta\n")
+                        if dec.lower() == "saldo":
+                            decision = True
+                            pago = True
+                            entrada = Entrada(peli_selec[0], entradas[id - 1][1], entradas[id - 1][0],
+                                              asiento[1], asiento[0], user_accedido)
+                            long_p = self.db.consultar_peticiones()
+                            peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
+                            data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                                3]
+                            firma = self.firmar_datos(data, user_accedido)
+                            peticion.append(firma)
+                            self.db.anadir_cargo([None, entrada.id])
+                            self.db.anadir_peticion(peticion)
+                        elif dec.lower() == "tarjeta":
+                            tarjeta_db = self.validar_tarjeta(user_accedido)
+                            if tarjeta_db:
+                                saldo_tarj = tarjeta_db[4]
+                                if saldo_tarj < 8:
+                                    print(
+                                        "Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
+                                else:
+                                    pago = True
+                                    entrada = Entrada(peli_selec[0], entradas[id - 1][1], entradas[id - 1][0],
+                                                      asiento[1], asiento[0], user_accedido)
+                                    long_p = self.db.consultar_peticiones()
+                                    peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
+                                    data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                                        3]
+                                    firma = self.firmar_datos(data, user_accedido)
+                                    peticion.append(firma)
+                                    self.db.anadir_cargo([tarjeta_db[1], entrada.id])
+                                    self.db.anadir_peticion(peticion)
+                            else:
+                                print(
+                                    "Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
+                        else:
+                            print("No has seleccionado un método de pago válido")
                 else:
-                    print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
+                    tarjeta_db = self.validar_tarjeta(user_accedido)
+                    if tarjeta_db:
+                        saldo_tarj = tarjeta_db[4]
+                        if saldo_tarj < 8:
+                            print(
+                                "Esta tarjeta no tiene suficiente saldo para comprar una entrada, seleccione o guarde una tarjeta con saldo suficiente, porfavor")
+                        else:
+                            pago = True
+                            entrada = Entrada(peli_selec[0], entradas[id - 1][1], entradas[id - 1][0],
+                                              asiento[1], asiento[0], user_accedido)
+                            long_p = self.db.consultar_peticiones()
+                            peticion = [len(long_p) + 1, "Compra", entrada.id, user_accedido]
+                            data = str(peticion[0]) + peticion[1] + str(peticion[2].decode('utf-8')) + peticion[
+                                3]
+                            firma = self.firmar_datos(data, user_accedido)
+                            peticion.append(firma)
+                            self.db.anadir_cargo([tarjeta_db[1], entrada.id])
+                            self.db.anadir_peticion(peticion)
+                    else:
+                        print("Los datos introducidos no corresponden a ninguna tarjeta de tu propiedad, si no la has guardado con anterioridad, porfavor, hazlo")
             elif acc_tarj.upper() == "BORRAR":
                 tarjetas = self.mostrar_tarjetas(user_accedido)
                 if len(tarjetas)>0:
@@ -357,12 +403,12 @@ class Terminal:
                             return 0
                         else:
                             borrado = True
-                    print("Tarjeta borrada correctamente de la base de datos")
+                            print("Tarjeta borrada correctamente de la base de datos")
             elif acc_tarj.upper() == "EXIT":
                 return 0
             else:
                 print("Introduzca una operación válida")
-        print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido realizado, gracias por su compra "+user_accedido)
+        print("El pago de 8€ para la entrada de la película "+ peli_selec[0]+" ha sido registrado, esta petición se atenderá lo más pronto posible "+user_accedido)
 
     """Función que tiene la gestión del perfil de user_accedido. Se pueden realizar 6 acciones."""
     def acc_perfil(self, user_accedido):
@@ -797,7 +843,7 @@ class Terminal:
                 if accion.lower() == "usuarios":
                     self.gestion_users(user_accedido)
                 elif accion.lower() == "peticiones":
-                    self.gestionar_peticiones()
+                    self.gestionar_peticiones(user_accedido)
                 elif accion.lower() == "exit":
                     print("Saliendo del menú de sistema")
                     return True
@@ -847,7 +893,7 @@ class Terminal:
                                                     self.db.borrar_peticion(peticion_u[0])
                                             peticiones_conf = self.db.consultar_peticiones_conf()
                                             self.db.anadir_peticion_confirmada([len(peticiones_conf)+1, "Rol", None, user[0], None, "Cambio1", None])
-                                            print("El rol de "+user[0]+" ha sido actualizado correctamente")
+                                            print("El rol de "+user[0]+" será actualizado correctamente")
                                             return True
                                         elif conf.lower() == "no":
                                             return True
@@ -857,10 +903,9 @@ class Terminal:
                                     while True:
                                         conf = input("El rol de "+user[0]+" pasará de Administrador a Usuario, ¿desea continuar? SI || NO")
                                         if conf.lower() == "si":
-                                            self.db.actualizar_rol_user(user[0], "U")
                                             peticiones_conf = self.db.consultar_peticiones_conf()
                                             self.db.anadir_peticion_confirmada([len(peticiones_conf)+1, "Rol", None, user[0], None, "Cambio2", None])
-                                            print("El rol de "+user[0]+" ha sido actualizado correctamente")
+                                            print("El rol de "+user[0]+" será actualizado correctamente")
                                             return True
                                         elif conf.lower() == "no":
                                             return True
@@ -902,6 +947,7 @@ class Terminal:
                                 peticiones_user = self.db.consultar_peticiones_user(user[0])
                                 tarjetas_user = self.db.select_tarjetas(user[0])
                                 entradas_user = self.db.entradas_compradas(user[0])
+                                asym_keys = self.db.consultar_claves_asim(user[0])
                                 for peticion in peticiones_user:
                                     self.db.borrar_peticion_conf(peticion[0])
                                 for peticion in peticiones_conf_user:
@@ -912,6 +958,8 @@ class Terminal:
                                     self.db.borrar_entrada(entrada[0])
                                 self.recolocar_peticiones()
                                 self.recolocar_peticiones_conf()
+                                os.remove(asym_keys[0][2])
+                                self.db.borrar_asym_keys(user[0])
                                 self.db.borrar_user(user[0])
                                 print("El usuario " + user[0] + " ha sido eliminado correctamente")
                                 return True
@@ -990,12 +1038,12 @@ class Terminal:
                             data = str(pet_selec[0]) + pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3]
                         else:
                             data = str(pet_selec[0]) + pet_selec[1] + pet_selec[3]
-                        if self.verificacion_firma(data, pet_selec[4], pet_selec[3]):
+                        if self.verificacion_firma(data, pet_selec[4], pet_selec[3], user_accedido):
                             decision_Tomada = False
                             while not decision_Tomada:
                                 conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
                                 if conf.lower() == "aceptar":
-                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "aceptado", None]
+                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Aceptado", None]
                                     peticion_conf[0] = len(peticiones_confirmadas) + 1
                                     if peticion_conf[1] == "Compra":
                                         datos_entrada = json.loads(base64.b64decode(peticion_conf[3]).decode('utf-8'))
@@ -1011,8 +1059,10 @@ class Terminal:
                                     return True
                                 elif conf.lower() == "rechazar":
                                     print("Volviendo al menú de selección de user")
-                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "aceptado", None]
+                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Rechazado", None]
                                     peticion_conf[0] = len(peticiones_confirmadas) + 1
+                                    if pet_selec[1] == "Compra":
+                                        self.db.borrar_cargo(pet_selec[2])
                                     self.db.anadir_peticion_confirmada(peticion_conf)
                                     self.db.borrar_peticion(pet_selec[0])
                                     self.recolocar_peticiones()
@@ -1021,12 +1071,11 @@ class Terminal:
                                     print("No has tomado una decisión válida")
                         else:
                             print("Esta petición no esta verificada, se procederá e eliminarse")
-                            peticion_conf = pet_selec + ["rechazado"]
+                            peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Rechazado", None]
                             peticion_conf[0] = len(peticiones_confirmadas) + 1
-                            peticion_conf[4] = None
-                            peticion_conf[6] = None
                             self.db.anadir_peticion_confirmada(peticion_conf)
                             self.db.borrar_peticion(pet_selec[0])
+                            self.db.borrar_cargo(pet_selec[2])
                             self.recolocar_peticiones()
                             print("La petición ha sido borrada con éxito")
                             return False
@@ -1046,11 +1095,11 @@ class Terminal:
                 if peticion[1] == "Rol":
                     if peticion[5] == "Aceptado":
                         self.db.actualizar_rol_user(user_accedido, "A")
-                        print("- Se ha "+peticion[5]+" tu petición: obtener rol de Administrador")
-                    elif peticion[5] == "CambioU-A":
+                        print("- Se ha aceptado tu petición: obtener rol de Administrador")
+                    elif peticion[5] == "Cambio1":
                         self.db.actualizar_rol_user(user_accedido, "A")
                         print("- Tu rol ha sido actualizado a Administrador")
-                    elif peticion[5] == "CambioA-U":
+                    elif peticion[5] == "Cambio2":
                         self.db.actualizar_rol_user(user_accedido, "U")
                         print("- Tu rol ha sido actualizado a Usuario")
                     else:
@@ -1060,7 +1109,7 @@ class Terminal:
                         datos_entrada = json.loads(base64.b64decode(peticion[3]).decode('utf-8'))
                         entrada_comprada = Entrada(datos_entrada["pelicula"], datos_entrada["hora"], datos_entrada["sala"], datos_entrada["fila"], datos_entrada["asiento"], user_accedido)
                         "una vez se verifica la firma de la entrada se realiza el cargo de la compra a la tarjeta del usuario y se hace efectiva la entrada"
-                        if self.verificacion_firma(entrada_comprada.__str__(), peticion[4], peticion[6]):
+                        if self.verificacion_firma(entrada_comprada.__str__(), peticion[4], peticion[6], user_accedido):
                             cargo = self.db.select_cargo(entrada_comprada.id)
                             tarj_actual = self.db.get_tarjeta(cargo[0][0])
                             if len(tarj_actual) == 0:
@@ -1130,7 +1179,7 @@ class Terminal:
         i = 1
         for peticion in peticiones:
             self.db.borrar_peticion(peticion[0])
-            peticion_nueva = [peticion[0], peticion[1], peticion[2], peticion[3], peticion[4], peticion[5], peticion[6]]
+            peticion_nueva = [peticion[0], peticion[1], peticion[2], peticion[3], peticion[4]]
             peticion_nueva[0] = i
             self.db.anadir_peticion(peticion_nueva)
             i += 1
@@ -1141,7 +1190,7 @@ class Terminal:
             self.db.borrar_peticion_conf(peticion[0])
             peticion_nueva = [peticion[0], peticion[1], peticion[2], peticion[3], peticion[4], peticion[5], peticion[6]]
             peticion_nueva[0] = i
-            self.db.anadir_peticion(peticion_nueva)
+            self.db.anadir_peticion_confirmada(peticion_nueva)
             i += 1
 
     def hacer_peticion(self, user_accedido):
@@ -1272,7 +1321,10 @@ class Terminal:
     def firmar_datos(self, datos, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_accedido)
         kv = self.cargar_kv(asim_keys[0][2])
-        firma = kv.sign(datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+        firma_bin = kv.sign(datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+        firma = base64.b64encode(firma_bin)
+        datos_log = ["Firma", datos, firma, None, asim_keys[0][2], user_accedido, None]
+        self.db.anadir_log_firma(datos_log)
         return firma
 
 
@@ -1285,13 +1337,18 @@ class Terminal:
             )
         return private_key
 
-    def verificacion_firma(self, datos, firma, user_firmante):
+    def verificacion_firma(self, datos, firma, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
         ku = serialization.load_pem_public_key(asim_keys[0][1])
+        firma_bin = base64.b64decode(firma)
         try:
-            ku.verify(firma, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+            ku.verify(firma_bin, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()),salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+            datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "Válido"]
+            self.db.anadir_log_firma(datos_log)
             return True
         except InvalidSignature:
+            datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "No Válido"]
+            self.db.anadir_log_firma(datos_log)
             return False
 
 
