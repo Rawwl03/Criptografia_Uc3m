@@ -1273,9 +1273,9 @@ class Terminal:
         pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
         with open(ruta_pem, "wb") as archivo:
             archivo.write(pem)
-        public_key = private_key.public_key()
-        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        datos = [user_accedido, pem_u, ruta_pem]
+        cert=self.crear_cert(user_accedido,"Sistema",private_key)
+        cert_codificado=cert.public_bytes(serialization.Encoding.PEM)
+        datos = [user_accedido, cert_codificado, ruta_pem]
         self.db.anadir_claves_asim(datos)
 
     def acceso_biom(self):
@@ -1341,16 +1341,20 @@ class Terminal:
 
     def verificacion_firma(self, datos, firma_bin, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
-        ku = serialization.load_pem_public_key(asim_keys[0][1])
-        firma = base64.b64decode(firma_bin)
-        try:
-            ku.verify(firma, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
-            datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "Válido"]
-            self.db.anadir_log_firma(datos_log)
-            return True
-        except InvalidSignature:
-            datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "No Válido"]
-            self.db.anadir_log_firma(datos_log)
+        cert = self.verificacion_certificado(asim_keys[0][1])
+        if cert:
+            ku = cert.public_key()
+            firma = base64.b64decode(firma_bin)
+            try:
+                ku.verify(firma, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+                datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "Válido"]
+                self.db.anadir_log_firma(datos_log)
+                return True
+            except InvalidSignature:
+                datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "No Válido"]
+                self.db.anadir_log_firma(datos_log)
+            return False
+        else:
             return False
 
     """def cert_peticion(self, user_accedido, kv):
@@ -1359,11 +1363,35 @@ class Terminal:
         csr_codificado = csr.public_bytes(serialization.Encoding.PEM)
         return csr_codificado"""
 
-    def crear_cert(self, csr_cod, issuer):
-        csr = x509.load_pem_x509_csr(csr_cod)
-        self.verificacion_firma(csr, csr.signature, issuer, csr.subject.)
+    def crear_cert(self,user_accedido ,issuer,priv_key_user,csr_cod=None):
+        #csr = x509.load_pem_x509_csr(csr_cod)
+        #self.verificacion_firma(csr, csr.signature, issuer, csr.subject.)
+        priv_key_sys=self.db.consultar_claves_asim(issuer)
+        cert= self.verificacion_certificado(priv_key_sys[0][1])
+        if cert:
+            subject = x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])
+            issuer = x509.Name([
+                x509.NameAttribute(NameOID.COMMON_NAME, issuer)])
+            cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(
+                priv_key_user.public_key()).serial_number(
+                x509.random_serial_number()).not_valid_before(
+                datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
+                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).sign(priv_key_sys[0][2], hashes.SHA256())
+            return cert
+        return None
 
-    def verificacion_certificado(self, cert, firma, issuer, subject):
+    def verificacion_certificado(self, cert):
+        cert=x509.load_pem_x509_certificate(cert)
+        firma=cert.signature
+        try:
+            cert.public_key().verify(firma,cert.tbs_certificate_bytes,padding.PKCS1v15(),cert.signature_hash_algorithm)
+            time_now =datetime.datetime.now(datetime.timezone.utc)
+            if time_now <cert.not_valid_before or time_now>cert.not_valid_after:
+                return False
+            return cert
+        except InvalidSignature:
+            return False
 
 if __name__ == "__main__":
     term_1 = Terminal()
