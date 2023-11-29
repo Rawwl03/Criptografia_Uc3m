@@ -5,10 +5,13 @@ from cinema_structure.Sala import Sala
 from cinema_structure.Fila import Fila
 from cinema_structure.Asiento import Asiento
 from cinema_structure.Horario_Peli import Horario_Peli
-from datetime import datetime
+import datetime
 from users_data.Tarjeta import Tarjeta
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
 
 class Database:
 
@@ -16,7 +19,7 @@ class Database:
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
         self.contrasena_sys = "Sistema!01!Key"
-        #self.generar_base()
+        self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
@@ -486,10 +489,21 @@ class Database:
                                         encryption_algorithm=cifrador)
         with open(ruta_pem, "wb") as archivo:
             archivo.write(pem_k)
-        public_key = private_key.public_key()
-        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        datos = ["Sistema", pem_u, ruta_pem]
+        cert = self.certificado_propio("Sistema", private_key)
+        datos = ["Sistema", cert, ruta_pem]
         self.anadir_claves_asim(datos)
+
+    def certificado_propio(self, user_accedido, kv):
+        subject = issuer = x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])
+        cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(
+            kv.public_key()).serial_number(
+            x509.random_serial_number()).not_valid_before(
+            datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
+            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).sign(kv, hashes.SHA256())
+        cert_codificado = cert.public_bytes(serialization.Encoding.PEM)
+        common_name = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
+        return cert_codificado
 
     """Cerrar conexión con la base"""
     def cerrar_base(self):

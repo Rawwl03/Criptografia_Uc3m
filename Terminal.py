@@ -10,6 +10,9 @@ from cryptography.exceptions import InvalidKey, InvalidSignature
 from users_data.Tarjeta import Tarjeta
 from Database import Database
 from users_data.Entrada import Entrada
+import datetime
+from cryptography import x509
+from cryptography.x509.oid import NameOID
 
 
 """VARIABLES GLOBALES"""
@@ -764,62 +767,6 @@ class Terminal:
             for i in range(0, len(entradas)):
                 print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][1]+", Hora: "+entradas[i][2]+", Sala: "+str(entradas[i][3])+", Fila: "+str(entradas[i][4])+", Asiento: "+str(entradas[i][5]))
 
-    def generar_asimethric_keys(self, user_accedido):
-        global contrasena_user
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        cifrador = serialization.BestAvailableEncryption(contrasena_user.encode())
-        ruta_pem = "claves_privadas/"+user_accedido+".pem"
-        pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
-        with open(ruta_pem, "wb") as archivo:
-            archivo.write(pem)
-        public_key = private_key.public_key()
-        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
-        datos = [user_accedido, pem_u, ruta_pem]
-        self.db.anadir_claves_asim(datos)
-
-    def acceso_biom(self):
-        # Cargar la imagen de la cara que quieres reconocer
-        imagen_conocida = face_recognition.load_image_file("accesoBiom.jpg")
-        codificacion_conocida_rawwl = face_recognition.face_encodings(imagen_conocida)[0]
-        codificacion_conocida_mario = face_recognition.face_encodings(imagen_conocida)[1]
-
-        # Iniciar la cámara
-        cap = cv2.VideoCapture(0)
-        inicio = time.time()
-        while True:
-            # Capturar un fotograma
-            ret, frame = cap.read()
-            # Encontrar todas las caras en el fotograma
-            ubicaciones = face_recognition.face_locations(frame)
-            codificaciones = face_recognition.face_encodings(frame, ubicaciones)
-            # Dibujar cuadros alrededor de las caras en el fotograma
-            for ubicacion in ubicaciones:
-                top, right, bottom, left = ubicacion
-                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            # Comparar con las caras conocidas
-            for codificacion in codificaciones:
-                coincidencias = face_recognition.compare_faces([codificacion_conocida_rawwl, codificacion_conocida_mario], codificacion)
-                if True in coincidencias:
-                    print("Acceso al sistema permitido")
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    return True
-            # Mostrar el fotograma
-            cv2.imshow('Frame', frame)
-            lap = time.time()
-            if lap-inicio > 10:
-                print("Acceso al sistema denegado")
-                cap.release()
-                cv2.destroyAllWindows()
-                return False
-            # Salir del bucle si se presiona la tecla 'q'
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Acceso al sistema denegado")
-                cap.release()
-                cv2.destroyAllWindows()
-                return False
-            time.sleep(0.5)
-
     def menu_sistema(self, user_accedido):
         global contrasena_user
         print("Selecciona la acción de gestión de sistema que desea realizar")
@@ -1114,7 +1061,7 @@ class Terminal:
                             cargo = self.db.select_cargo(entrada_comprada.id)
                             tarj_actual = self.db.get_tarjeta(cargo[0][0])
                             if len(tarj_actual) == 0:
-                                user = self.db.existe_user(peticion[4])
+                                user = self.db.existe_user(user_accedido)
                                 if user[0][4] < 8:
                                     print("La tarjeta con la que se iba a hacer el pago ya no existe, se ha rechazado la compra de la entrada")
                                 else:
@@ -1124,7 +1071,6 @@ class Terminal:
                                         if dec.lower() == "si":
                                             self.db.actualizar_saldo_user(user_accedido, user[0][4]-8)
                                             self.db.anadir_entrada(entrada_comprada)
-                                            self.db.borrar_cargo(entrada_comprada.id)
                                             print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
                                             dec_correcto = True
                                         elif dec.lower() == "no":
@@ -1132,11 +1078,10 @@ class Terminal:
                                         else:
                                             print("No se ha escrito una opción válida")
                             else:
-                                user = self.db.existe_user(peticion[4])
+                                user = self.db.existe_user(user_accedido)
                                 if tarj_actual[0][4] > 8:
                                     self.db.actualizar_saldo(cargo[0][0], tarj_actual[0][4]-8)
                                     self.db.anadir_entrada(entrada_comprada)
-                                    self.db.borrar_cargo(entrada_comprada.id)
                                     print("- Se ha aceptado tu petición: compra de entrada. (-8€ en tu tarjeta)")
                                 else:
                                     if user[0][4] < 8:
@@ -1151,7 +1096,6 @@ class Terminal:
                                             if dec.lower() == "si":
                                                 self.db.actualizar_saldo_user(user_accedido, user[0][4] - 8)
                                                 self.db.anadir_entrada(entrada_comprada)
-                                                self.db.borrar_cargo(entrada_comprada.id)
                                                 print(
                                                     "- Se ha aceptado tu petición: compra de entrada. (-8€ en tu cuenta)")
                                                 dec_correcto = True
@@ -1161,15 +1105,15 @@ class Terminal:
                                                 print("No se ha escrito una opción válida")
                     else:
                         print("- Se ha rechazado tu petición: compra de entrada")
-                    self.db.borrar_cargo(peticion[3])
+                    self.db.borrar_cargo(peticion[2])
                 elif peticion[1] == "Devolucion":
                     if peticion[5] == "Aceptado":
-                        user = self.db.existe_user(peticion[4])
+                        user = self.db.existe_user(user_accedido)
                         self.db.borrar_entrada(peticion[2])
                         self.db.actualizar_saldo_user(user[0][0], user[0][4] + 8)
                         print("- Se ha aceptado tu petición: devolución de la entrada. +8€ en tu cuenta")
                     elif peticion[5] == "Retirada":
-                        user = self.db.existe_user(peticion[4])
+                        user = self.db.existe_user(user_accedido)
                         self.db.borrar_entrada(peticion[2])
                         self.db.actualizar_saldo_user(user[0][0], user[0][4] + 8)
                         print("- Se ha retirado una de tus entradas. +8€ en tu cuenta")
@@ -1321,6 +1265,61 @@ class Terminal:
         except ValueError:
             print("No has introducido un numero")
 
+    def generar_asimethric_keys(self, user_accedido):
+        global contrasena_user
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cifrador = serialization.BestAvailableEncryption(contrasena_user.encode())
+        ruta_pem = "claves_privadas/"+user_accedido+".pem"
+        pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
+        with open(ruta_pem, "wb") as archivo:
+            archivo.write(pem)
+        public_key = private_key.public_key()
+        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        datos = [user_accedido, pem_u, ruta_pem]
+        self.db.anadir_claves_asim(datos)
+
+    def acceso_biom(self):
+        # Cargar la imagen de la cara que quieres reconocer
+        imagen_conocida = face_recognition.load_image_file("accesoBiom.jpg")
+        codificacion_conocida_rawwl = face_recognition.face_encodings(imagen_conocida)[0]
+        codificacion_conocida_mario = face_recognition.face_encodings(imagen_conocida)[1]
+
+        # Iniciar la cámara
+        cap = cv2.VideoCapture(0)
+        inicio = time.time()
+        while True:
+            # Capturar un fotograma
+            ret, frame = cap.read()
+            # Encontrar todas las caras en el fotograma
+            ubicaciones = face_recognition.face_locations(frame)
+            codificaciones = face_recognition.face_encodings(frame, ubicaciones)
+            # Dibujar cuadros alrededor de las caras en el fotograma
+            for ubicacion in ubicaciones:
+                top, right, bottom, left = ubicacion
+                cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+            # Comparar con las caras conocidas
+            for codificacion in codificaciones:
+                coincidencias = face_recognition.compare_faces([codificacion_conocida_rawwl, codificacion_conocida_mario], codificacion)
+                if True in coincidencias:
+                    print("Acceso al sistema permitido")
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    return True
+            # Mostrar el fotograma
+            cv2.imshow('Frame', frame)
+            lap = time.time()
+            if lap-inicio > 10:
+                print("Acceso al sistema denegado")
+                cap.release()
+                cv2.destroyAllWindows()
+                return False
+            # Salir del bucle si se presiona la tecla 'q'
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print("Acceso al sistema denegado")
+                cap.release()
+                cv2.destroyAllWindows()
+                return False
+            time.sleep(0.5)
 
     def firmar_datos(self, datos, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_accedido)
@@ -1331,7 +1330,6 @@ class Terminal:
         self.db.anadir_log_firma(datos_log)
         return firma
 
-
     def cargar_kv(self, ruta_pem):
         global contrasena_user
         with open(ruta_pem, "rb") as key_file:
@@ -1341,12 +1339,12 @@ class Terminal:
             )
         return private_key
 
-    def verificacion_firma(self, datos, firma, user_firmante, user_accedido):
+    def verificacion_firma(self, datos, firma_bin, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
         ku = serialization.load_pem_public_key(asim_keys[0][1])
-        firma_bin = base64.b64decode(firma)
+        firma = base64.b64decode(firma_bin)
         try:
-            ku.verify(firma_bin, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
+            ku.verify(firma, datos.encode('utf-8'), padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH), hashes.SHA256())
             datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "Válido"]
             self.db.anadir_log_firma(datos_log)
             return True
@@ -1355,6 +1353,17 @@ class Terminal:
             self.db.anadir_log_firma(datos_log)
             return False
 
+    """def cert_peticion(self, user_accedido, kv):
+        csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+            x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])).sign(kv, hashes.SHA256())
+        csr_codificado = csr.public_bytes(serialization.Encoding.PEM)
+        return csr_codificado"""
+
+    def crear_cert(self, csr_cod, issuer):
+        csr = x509.load_pem_x509_csr(csr_cod)
+        self.verificacion_firma(csr, csr.signature, issuer, csr.subject.)
+
+    def verificacion_certificado(self, cert, firma, issuer, subject):
 
 if __name__ == "__main__":
     term_1 = Terminal()
