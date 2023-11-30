@@ -768,6 +768,8 @@ class Terminal:
             for i in range(0, len(entradas)):
                 print("|"+str(i+1)+"| -> Pelicula: "+entradas[i][1]+", Hora: "+entradas[i][2]+", Sala: "+str(entradas[i][3])+", Fila: "+str(entradas[i][4])+", Asiento: "+str(entradas[i][5]))
 
+    """Método que implementa el menu del sistema, para poder gestionar usuarios,peticiones y entradas, si el 
+    user_accedido es el sistema o gestionar solo usuarios y peticiones si el usuario es un administrador"""
     def menu_sistema(self, user_accedido):
         global contrasena_user
         if user_accedido == "Sistema":
@@ -801,6 +803,7 @@ class Terminal:
                 else:
                     print("Escriba una acción válida")
 
+    """Método para gestionar los usuarios"""
     def gestion_users(self, user_accedido):
         while True:
             accion = input(" Ver || Eliminar || EXIT\n")
@@ -814,6 +817,8 @@ class Terminal:
             else:
                 print("Escriba una acción válida")
 
+    """Método para mostrar a toods los usuarios del sistema. Este método también permite
+    realizar el cambio de rol a un usuario si el user_accedido es "Sistema" y solo_mostrar es false"""
     def mostrar_usuarios(self, user_accedido, solo_mostrar, admin = False):
         users = self.db.consultar_users()
         if len(users) == 0:
@@ -868,7 +873,7 @@ class Terminal:
                     else:
                         print("Acción no válida")
 
-
+    """Método para eliminar a un usuario del sistema"""
     def eliminar_user(self, user_accedido):
         users = self.db.consultar_users()
         if user_accedido != "Sistema":
@@ -920,6 +925,7 @@ class Terminal:
                                 print("Acción no válida")
                 print("El nombre introducido no corresponde a ningún usuario")
 
+    """Método que implementa un menu de gestionar peticiones"""
     def gestionar_peticiones(self, user_accedido):
         while True:
             opcion = input("Elija que opción hacer con las peticiones: Ver || Gestion || EXIT\n")
@@ -933,6 +939,8 @@ class Terminal:
             else:
                 print("Escriba una opción válida")
 
+    """Método para ver las peticiones de un usuario, si acc es None, o las peticiones de todos los usuarios si
+    acc es True. Si acc es True, este método también permite eliminar peticiones del sistema"""
     def ver_peticiones(self, user=None, acc=None):
         if user:
             peticiones = self.db.consultar_peticiones_user(user)
@@ -971,6 +979,7 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un numero")
 
+    """Método para gestionar las peticiones del sistema"""
     def aprob_petic(self, user_accedido):
         peticiones = self.db.consultar_peticiones()
         peticiones_confirmadas = self.db.consultar_peticiones_conf()
@@ -989,6 +998,7 @@ class Terminal:
                             data = pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3]
                         else:
                             data = pet_selec[1] + pet_selec[3]
+                        """Se verifica la autenticidad de la petición"""
                         valido = self.verificacion_firma(data, pet_selec[4], pet_selec[3], user_accedido)
                         if valido == True:
                             decision_Tomada = False
@@ -1038,6 +1048,7 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un numero")
 
+    """Método para mostrar las peticiones, que ha realizado un usario"""
     def mostrar_peticiones_user(self, user_accedido):
         peticiones = self.db.consultar_peticiones_user(user_accedido)
         if len(peticiones) > 0:
@@ -1128,6 +1139,7 @@ class Terminal:
                 self.db.borrar_peticion_conf(peticion[0])
             self.recolocar_peticiones_conf()
 
+    """Método para recolora las peticiones, que se llama cada vez que se elimina una petición"""
     def recolocar_peticiones(self):
         peticiones = self.db.consultar_peticiones()
         i = 1
@@ -1137,6 +1149,8 @@ class Terminal:
             peticion_nueva[0] = i
             self.db.anadir_peticion(peticion_nueva)
             i += 1
+
+    """Método para recolora las peticiones_conf, que se llama cada vez que se elimina una petición confirmada"""
     def recolocar_peticiones_conf(self):
         peticiones_conf = self.db.consultar_peticiones_conf()
         i = 1
@@ -1147,6 +1161,7 @@ class Terminal:
             self.db.anadir_peticion_confirmada(peticion_nueva)
             i += 1
 
+    """Método para realizar una petición, de cambio de rol o de devolución de una entrada"""
     def hacer_peticion(self, user_accedido):
         while True:
             pet_elegida = input("¿Que petición desea realizar? Rol || Devolucion || EXIT\n")
@@ -1170,6 +1185,7 @@ class Terminal:
             else:
                 print("Escriba una opción válida")
 
+    """Método para devolver una entrada, realizando una petición de devolución, si no se ha realizado ya"""
     def menu_devolucion(self, user_accedido):
         entradas = self.db.entradas_compradas(user_accedido)
         self.mostrar_entradas(user_accedido)
@@ -1210,6 +1226,7 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un numero")
 
+    """Método para gestionar las entrada, por parte del sistema"""
     def gestionar_entradas(self):
         while True:
             opcion = input("Elija que opción hacer con las entradas: Ver || Eliminar || EXIT\n")
@@ -1223,6 +1240,7 @@ class Terminal:
             else:
                 print("Escriba una opción válida")
 
+    """Método para ver las entradas compradas"""
     def ver_entradas(self):
         entradas = self.db.consultar_entradas()
         print("Hay un total de "+str(len(entradas))+" entradas compradas\n\n")
@@ -1230,6 +1248,7 @@ class Terminal:
             entrada = Entrada(entradas[i][1], entradas[i][2], entradas[i][3], entradas[i][4], entradas[i][5], entradas[i][6])
             print(str(i+1)+") "+entrada.__str__())
 
+    """Método para eliminar una entrada"""
     def eliminar_entradas(self):
         entradas = self.db.consultar_entradas()
         self.ver_entradas()
@@ -1271,6 +1290,8 @@ class Terminal:
         except ValueError:
             print("No has introducido un numero")
 
+    """Método para generar las claves asimétricas. Este método crea una clave privada para un usuario y establece su
+    certificado a None en la tabla ASYMETHRIC_KEYS. Simultaneamente, también se genera una solicitud de verificado"""
     def generar_asimethric_keys(self, user_accedido):
         global contrasena_user
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -1283,6 +1304,7 @@ class Terminal:
         datos = [user_accedido, None, ruta_pem]
         self.db.anadir_claves_asim(datos)
 
+    """Método para realizar el acceso facial, para poder acceder al usuario "Sistema" """
     def acceso_biom(self):
         # Cargar la imagen de la cara que quieres reconocer
         imagen_conocida = face_recognition.load_image_file("accesoBiom.jpg")
@@ -1326,6 +1348,7 @@ class Terminal:
                 return False
             time.sleep(0.5)
 
+    """Método para firmar unos datos"""
     def firmar_datos(self, datos, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_accedido)
         kv = self.cargar_kv(asim_keys[0][2])
@@ -1335,6 +1358,7 @@ class Terminal:
         self.db.anadir_log_firma(datos_log)
         return firma
 
+    """Método para obtener la clave privada a partir de un pem"""
     def cargar_kv(self, ruta_pem):
         global contrasena_user
         with open(ruta_pem, "rb") as key_file:
@@ -1344,6 +1368,12 @@ class Terminal:
             )
         return private_key
 
+    """Método para verificar una firma, al que se le pasa los datos a firmar, una firma en binario,
+    el usuario que ha realizado la firma y el usuario actual. Lo primero que se hace es llamar a 
+    verificacion_certificado, para comprobar que tanto el certificado del sistema como el del usuario firmante es válido.
+    Una vez validados ambos cetificados se procede a obtener la clave pública del firmante a partir de su certificado, y
+    se verifica la firma, devolviendo true si la firma se valida y false en caso contrario.
+    """
     def verificacion_firma(self, datos, firma_bin, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
         asim_keys_sys = self.db.consultar_claves_asim("Sistema")
@@ -1363,12 +1393,15 @@ class Terminal:
         else:
             return None
 
+    """Método para crea una solicitud de certificado, utilizando CertificateSigningRequestBuilder"""
     def crear_csr(self, user_accedido, kv):
         csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])).sign(kv, hashes.SHA256())
         csr_codificado = csr.public_bytes(serialization.Encoding.PEM)
         self.db.anadir_csr(csr_codificado)
 
+    """Método para crear un certificado a partir de una solicitud de certificado. Si la solicitud no es None, este método
+    devuelve el certificado codificado en formato pem"""
     def crear_cert(self, csr, cert):
         priv_key_sys = self.db.consultar_claves_asim(cert.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
         kv = self.cargar_kv(priv_key_sys[0][2])
@@ -1386,6 +1419,8 @@ class Terminal:
             return cert_pem
         return None
 
+    """Este método se ejecuta al acceder al usuario "Sistema" y se encarga de ir verificando todas las solicitudes de verificado, actualizando
+    el campo "certificado" en ASYMETHRIC_KEYS de aquellas solicitudes validas. Antes de ello se verifica que el certificado del sistema no ha expirado"""
     def gestion_csr(self):
         lista_request = self.db.consultar_csr()
         i = 0
@@ -1406,7 +1441,11 @@ class Terminal:
             else:
                 print("El certificado de la AC no es válido")
 
-
+    """Método para verificar un verificado al que se le pasa por parámeto el certificado del sistema,
+    el certificado a verificar, y el usuario asociado al certificado a verificar. El objetivo de esta función es verificar
+    que el certificado es válido y que no ha expirado. Si el certificado ha expirado y su usuario asociado era el "Sistema"
+    se actualiza el certificado del sistema, en caso contrario el campo certificado del usuario se pone a None en la tabla ASYMETHRIC_KEYS,
+    de forma que la próxima vez que se llame a consultar_certificado, se creará una solicitud de certificación"""
     def verificacion_certificado(self, cert, cert_user, user_accedido):
         cert = x509.load_pem_x509_certificate(cert)
         if cert_user:
@@ -1433,6 +1472,7 @@ class Terminal:
             self.consultar_certificado(user_accedido)
             return False
 
+    """Método para verificar una solicitud de verificado"""
     def verificacion_CertificateRequest(self, csr):
         csr = x509.load_pem_x509_csr(csr)
         firma = csr.signature
@@ -1442,6 +1482,8 @@ class Terminal:
         except InvalidSignature:
             return False
 
+    """Método que permite ver si un usuario tiene un certificado asociado en tabla ASYMETHRIC_KEYS. El objetivo de este método
+    es crear una solicitud de certificado para aquellos usuarios que no tengan un certificado asociado, ni hayan enviado una solicitud de certificado al AC"""
     def consultar_certificado(self, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_accedido)
         csr_list = self.db.consultar_csr()
