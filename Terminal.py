@@ -48,6 +48,7 @@ class Terminal:
                     self.rotacion_claves(user_accedido)
                     if not os.path.exists("claves_privadas/"+user_accedido+".pem"):
                         self.generar_asimethric_keys(user_accedido)
+                    self.consultar_certificado(user_accedido)
                     self.mostrar_peticiones_user(user_accedido)
             elif acceso.lower() == "system":
                 acceso = self.acceso_biom()
@@ -771,6 +772,7 @@ class Terminal:
         global contrasena_user
         print("Selecciona la acción de gestión de sistema que desea realizar")
         if user_accedido == "Sistema":
+            self.gestion_csr()
             contrasena_user = self.db.contrasena_sys
             while True:
                 accion = input("Usuarios || Peticiones || Entradas || EXIT\n")
@@ -1342,7 +1344,8 @@ class Terminal:
 
     def verificacion_firma(self, datos, firma_bin, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
-        cert = self.verificacion_certificado(asim_keys[0][1])
+        asim_keys_sys = self.db.consultar_claves_asim("Sistema")
+        cert = self.verificacion_certificado(asim_keys_sys[0][1], asim_keys[0][1])
         if cert:
             ku = cert.public_key()
             firma = base64.b64decode(firma_bin)
@@ -1365,9 +1368,8 @@ class Terminal:
         self.db.anadir_csr(csr_codificado)
 
     def crear_cert(self, csr, cert, valid_days=90):
-        priv_key_sys = self.db.consultar_claves_asim(cert.issuer.get)
+        priv_key_sys = self.db.consultar_claves_asim(cert.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
         kv = self.cargar_kv(priv_key_sys[0][2])
-        csr = self.verificacion_CertificateRequest(csr)
         if csr:
             subject = x509.Name([
                 x509.NameAttribute(NameOID.COMMON_NAME, csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)])
@@ -1409,12 +1411,14 @@ class Terminal:
         try:
             cert.public_key().verify(firma, cert_user.tbs_certificate_bytes, padding.PKCS1v15(), cert_user.signature_hash_algorithm)
             time_now = datetime.datetime.now(datetime.timezone.utc)
-            if time_now < cert.not_valid_before or time_now > cert.not_valid_after:
+            if time_now < cert_user.not_valid_before or time_now > cert_user.not_valid_after:
                 if cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == "Sistema":
                     asim_keys = self.db.consultar_claves_asim("Sistema")
                     kv = self.cargar_kv(asim_keys[0][2])
                     auto_cert = self.db.certificado_propio("Sistema", kv)
                     self.db.actualizar_cert(auto_cert, "Sistema")
+                else:
+                    self.db.actualizar_cert(None, cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
                 print("Certificado caducado, se ha registrado una nueva petición de certificado")
                 return False
             return cert_user
@@ -1430,6 +1434,19 @@ class Terminal:
             return csr
         except InvalidSignature:
             return False
+
+    def consultar_certificado(self, user_accedido):
+        asim_keys = self.db.consultar_claves_asim(user_accedido)
+        csr_list = self.db.consultar_csr()
+        found = False
+        for csr in csr_list:
+            if csr[0].subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == user_accedido:
+                found = True
+        if asim_keys[0][1] == None and not found:
+            kv = self.cargar_kv(asim_keys[0][2])
+            self.crear_csr(user_accedido, kv)
+
+
 
 if __name__ == "__main__":
     term_1 = Terminal()
