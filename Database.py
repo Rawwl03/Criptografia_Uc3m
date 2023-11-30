@@ -351,6 +351,7 @@ class Database:
         tarj = self.puntero.fetchall()
         return tarj
 
+    """Consulta que devuelve las entradas en orden según la película, y después según la hora"""
     def consultar_entradas(self):
         query = "SELECT * FROM ENTRADAS ORDER BY Pelicula, Hora"
         self.puntero.execute(query)
@@ -475,17 +476,11 @@ class Database:
         self.puntero.execute(query, (csr,))
         self.base.commit()
 
-    """Para cuando se haga la rotación de claves"""
+    """Función para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
         query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ?, Salt = ? WHERE Username = ?"
         self.puntero.execute(query, (hash_nuevo, salt_nuevo, user))
         self.base.commit()
-
-    def actualizar_tarjeta(self, tarjeta, cifrado_nuevo, nonce_nuevo, salt_nuevo):
-        query = "DELETE FROM TARJETAS WHERE Cifrado = ?"
-        self.puntero.execute(query, (tarjeta[1]))
-        tarjeta_nueva = Tarjeta(tarjeta[0], cifrado_nuevo, nonce_nuevo, salt_nuevo, tarjeta[4])
-        self.anadir_tarjeta(tarjeta_nueva)
 
     def actualizar_rol_user(self, user, nuevo_rol):
         query = "UPDATE USERS_REGISTERED SET Rol = ? WHERE Username = ?"
@@ -504,7 +499,7 @@ class Database:
 
     """Aquí vamos a crear las claves asimétricas del sistema, para poder firmar desde el programa. Se hace aquí porque
     la base de datos tiene un atributo accesible que es la contraseña utilizada en el sistema, y además se genera junto con la
-    base de datos inicialmente."""
+    base de datos inicialmente. También crearemos un certificado autofirmado"""
     def crear_asimkeys_sys(self):
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         ruta_pem = "claves_privadas/Sistema.pem"

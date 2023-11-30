@@ -806,6 +806,7 @@ class Terminal:
     """Método para gestionar los usuarios"""
     def gestion_users(self, user_accedido):
         while True:
+            print("Seleccione una opción del menú de gestión de usuarios")
             accion = input(" Ver || Eliminar || EXIT\n")
             if accion.lower() == "ver":
                 self.mostrar_usuarios(user_accedido, False)
@@ -949,6 +950,7 @@ class Terminal:
         if len(peticiones) == 0:
             print("No hay peticiones pendientes actualmente")
         else:
+            print("Las peticiones que hay son las siguientes:")
             print(" ID) TIPO || Username ")
             for peticion in peticiones:
                 print(str(peticion[0])+") "+peticion[1]+" - "+peticion[3])
@@ -1042,9 +1044,10 @@ class Terminal:
                             print("La petición ha sido borrada con éxito")
                             return False
                         else:
-                            print("El certificado del user que hice la petición no es válido")
+                            print("El certificado del user que hizo la petición no es válido, por lo que no se ha podido validar la petición")
+                            return False
                     else:
-                        print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el "+str(len(peticiones)+1)+" según la petición que quieras gestionar")
+                        print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el "+str(len(peticiones))+" según la petición que quieras gestionar")
                 except ValueError:
                     print("No has introducido un numero")
 
@@ -1464,7 +1467,7 @@ class Terminal:
                         return auto_cert_cod
                     else:
                         self.db.actualizar_cert(None, cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
-                    print("Certificado caducado")
+                    print("Certificado caducado del user, ha sido borrado")
                     return False
                 return cert_user
             except InvalidSignature:
@@ -1497,6 +1500,7 @@ class Terminal:
         if asim_keys[0][1] == None and not found:
             kv = self.cargar_kv(asim_keys[0][2])
             self.crear_csr(user_accedido, kv)
+            print("- Se ha creado una solicitud de certificado, tu certificado estará listo pronto")
 
 
 
