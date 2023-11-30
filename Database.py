@@ -19,7 +19,7 @@ class Database:
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
         self.contrasena_sys = "Sistema!01!Key"
-        #self.generar_base()
+        self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
