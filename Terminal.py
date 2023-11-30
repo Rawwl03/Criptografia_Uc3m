@@ -1048,7 +1048,7 @@ class Terminal:
                 except ValueError:
                     print("No has introducido un numero")
 
-    """Método para mostrar las peticiones, que ha realizado un usario"""
+    """Método para mostrar las peticiones, que ha realizado un usuario"""
     def mostrar_peticiones_user(self, user_accedido):
         peticiones = self.db.consultar_peticiones_user(user_accedido)
         if len(peticiones) > 0:
@@ -1139,7 +1139,7 @@ class Terminal:
                 self.db.borrar_peticion_conf(peticion[0])
             self.recolocar_peticiones_conf()
 
-    """Método para recolora las peticiones, que se llama cada vez que se elimina una petición"""
+    """Método para recoloca las peticiones, que se llama cada vez que se elimina una petición"""
     def recolocar_peticiones(self):
         peticiones = self.db.consultar_peticiones()
         i = 1
@@ -1428,7 +1428,7 @@ class Terminal:
             print("No hay peticiones de creación de certificados todavía")
         else:
             asim = self.db.consultar_claves_asim("Sistema")
-            cert = self.verificacion_certificado(asim[0][1], asim[0][1], user_accedido="Sistema")
+            cert = self.verificacion_certificado(asim[0][1], asim[0][1], user="Sistema")
             if cert:
                 for csr in lista_request:
                     csr_u = self.verificacion_CertificateRequest(csr[0])
@@ -1441,12 +1441,12 @@ class Terminal:
             else:
                 print("El certificado de la AC no es válido")
 
-    """Método para verificar un verificado al que se le pasa por parámeto el certificado del sistema,
+    """Método para verificar un certificado al que se le pasa por parámetro el certificado del sistema (AC),
     el certificado a verificar, y el usuario asociado al certificado a verificar. El objetivo de esta función es verificar
     que el certificado es válido y que no ha expirado. Si el certificado ha expirado y su usuario asociado era el "Sistema"
     se actualiza el certificado del sistema, en caso contrario el campo certificado del usuario se pone a None en la tabla ASYMETHRIC_KEYS,
     de forma que la próxima vez que se llame a consultar_certificado, se creará una solicitud de certificación"""
-    def verificacion_certificado(self, cert, cert_user, user_accedido):
+    def verificacion_certificado(self, cert, cert_user, user):
         cert = x509.load_pem_x509_certificate(cert)
         if cert_user:
             cert_user = x509.load_pem_x509_certificate(cert_user)
@@ -1460,16 +1460,18 @@ class Terminal:
                         kv = self.cargar_kv(asim_keys[0][2])
                         auto_cert = self.db.certificado_propio("Sistema", kv)
                         self.db.actualizar_cert(auto_cert, "Sistema")
+                        auto_cert_cod = x509.load_pem_x509_certificate(auto_cert)
+                        return auto_cert_cod
                     else:
                         self.db.actualizar_cert(None, cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
-                    print("Certificado caducado, se ha registrado una nueva petición de certificado")
+                    print("Certificado caducado")
                     return False
                 return cert_user
             except InvalidSignature:
                 print("Certificado no válido")
                 return False
         else:
-            self.consultar_certificado(user_accedido)
+            self.consultar_certificado(user)
             return False
 
     """Método para verificar una solicitud de verificado"""
