@@ -54,11 +54,12 @@ class Database:
                               " FOREIGN KEY(SALA) REFERENCES SALAS(Sala))"
         creacion_base_asientos = "CREATE TABLE ASIENTOS (Asiento INT(3), Fila INT(2), Sala INT(1), PRIMARY KEY(" \
                                  "Asiento, Fila, Sala), FOREIGN KEY(Fila) REFERENCES FILAS(Asiento), FOREIGN KEY(Sala) REFERENCES SALAS(ID))"
-        creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, PUBLIC_KEY BLOB NOT NULL, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
+        creacion_base_claves_asimetricas = "CREATE TABLE ASYMETHRIC_KEYS (Usuario VARCHAR2, CERTIFICATE BLOB, PRIVATE_KEY_ROUTE VARCHAR2 NOT NULL, " \
                                            "PRIMARY KEY(Usuario), FOREIGN KEY (Usuario) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_peticiones = "CREATE TABLE PETICIONES(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB NOT NULL, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username))"
         creacion_base_peticiones_terminadas = "CREATE TABLE PETICIONES_CONFIRMADAS(Id INT(3), Tipo VARCHAR2 NOT NULL, Entrada BLOB, Username VARCHAR2 NOT NULL, FIRMA BLOB,  Estado VARCHAR2 NOT NULL, Firmante VARCHAR2, PRIMARY KEY(Id), FOREIGN KEY(Username) REFERENCES USERS_REGISTERED(Username)) "
         creacion_base_cargos = "CREATE TABLE CARGOS(Tarjeta BLOB, Entrada BLOB, PRIMARY KEY(Entrada))"
+        creacion_base_csr = "CREATE TABLE CSR(CSR BLOB, PRIMARY KEY(CSR))"
 
         self.puntero.execute(creacion_base_users_registered)
         self.puntero.execute(creacion_base_tarjetas)
@@ -158,6 +159,12 @@ class Database:
     def anadir_cargo(self, cargo):
         query = "INSERT INTO CARGOS(Tarjeta, Entrada) VALUES (?,?)"
         self.puntero.execute(query, (cargo[0], cargo[1]))
+        self.base.commit()
+
+    def anadir_csr(self, csr):
+        query = "INSERT INTO CSR(Csr) VALUES (?)"
+        self.puntero.execute(query, (csr,))
+        self.base.commit()
 
     """Método para la generación de las películas disponibles para ver"""
     def generar_cartelera(self):
@@ -349,6 +356,12 @@ class Database:
         entradas = self.puntero.fetchall()
         return entradas
 
+    def consultar_csr(self):
+        query = "SELECT * FROM CSR"
+        self.puntero.execute(query)
+        lista_csr = self.puntero.fetchall()
+        return lista_csr
+
     """Consulta que devuelve los asientos disponibles para un horario de una película en concreto. entrada_selec es tipo Horario_Peli.
     Los asientos disponibles serán los asientos de una sala que no tengan entradas asignadas."""
     def asientos_disponibles(self, entrada_selec):
@@ -456,6 +469,11 @@ class Database:
         self.puntero.execute(query, (username,))
         self.base.commit()
 
+    def borrar_csr(self, csr):
+        query = "DELETE FROM CSR WHERE CSR = ?"
+        self.puntero.execute(query, (csr,))
+        self.base.commit()
+
     """Para cuando se haga la rotación de claves"""
     def actualizar_contrasena(self, user, hash_nuevo, salt_nuevo):
         query = "UPDATE USERS_REGISTERED SET Hash_contraseña = ?, Salt = ? WHERE Username = ?"
@@ -476,6 +494,11 @@ class Database:
     def actualizar_saldo_user(self, username, nuevo_saldo):
         query = "UPDATE USERS_REGISTERED SET Saldo = ? WHERE Username = ?"
         self.puntero.execute(query, (nuevo_saldo, username))
+        self.base.commit()
+
+    def actualizar_cert(self, cert, user):
+        query = "UPDATE ASYMETHRIC_KEYS SET CERT = ? WHERE Username = ?"
+        self.puntero.execute(query, (cert, user))
         self.base.commit()
 
     """Aquí vamos a crear las claves asimétricas del sistema, para poder firmar desde el programa. Se hace aquí porque
@@ -502,7 +525,6 @@ class Database:
             datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
             datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).sign(kv, hashes.SHA256())
         cert_codificado = cert.public_bytes(serialization.Encoding.PEM)
-        common_name = cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
         return cert_codificado
 
     """Cerrar conexión con la base"""

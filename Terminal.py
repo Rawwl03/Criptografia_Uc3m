@@ -1273,9 +1273,10 @@ class Terminal:
         pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
         with open(ruta_pem, "wb") as archivo:
             archivo.write(pem)
-        cert=self.crear_cert(user_accedido,"Sistema",private_key)
-        cert_codificado=cert.public_bytes(serialization.Encoding.PEM)
-        datos = [user_accedido, cert_codificado, ruta_pem]
+        public_key = private_key.public_key()
+        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+        self.crear_csr(user_accedido, private_key)
+        datos = [user_accedido, pem_u, ruta_pem]
         self.db.anadir_claves_asim(datos)
 
     def acceso_biom(self):
@@ -1353,43 +1354,80 @@ class Terminal:
             except InvalidSignature:
                 datos_log = ["Verificación", datos, firma, asim_keys[0][1], None, user_accedido, "No Válido"]
                 self.db.anadir_log_firma(datos_log)
-            return False
+                return False
         else:
             return False
 
-    """def cert_peticion(self, user_accedido, kv):
+    def crear_csr(self, user_accedido, kv):
         csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
             x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])).sign(kv, hashes.SHA256())
         csr_codificado = csr.public_bytes(serialization.Encoding.PEM)
-        return csr_codificado"""
+        self.db.anadir_csr(csr_codificado)
 
-    def crear_cert(self,user_accedido ,issuer,priv_key_user,csr_cod=None):
-        #csr = x509.load_pem_x509_csr(csr_cod)
-        #self.verificacion_firma(csr, csr.signature, issuer, csr.subject.)
-        priv_key_sys=self.db.consultar_claves_asim(issuer)
-        cert= self.verificacion_certificado(priv_key_sys[0][1])
-        if cert:
+    def crear_cert(self, csr, cert, valid_days=90):
+        priv_key_sys = self.db.consultar_claves_asim(cert.issuer.get)
+        kv = self.cargar_kv(priv_key_sys[0][2])
+        csr = self.verificacion_CertificateRequest(csr)
+        if csr:
             subject = x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, user_accedido)])
+                x509.NameAttribute(NameOID.COMMON_NAME, csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)])
             issuer = x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, issuer)])
+                x509.NameAttribute(NameOID.COMMON_NAME, cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)])
             cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(
-                priv_key_user.public_key()).serial_number(
+                csr.public_key()).serial_number(
                 x509.random_serial_number()).not_valid_before(
                 datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
-                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).sign(priv_key_sys[0][2], hashes.SHA256())
+                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(valid_days)).sign(kv, hashes.SHA256())
             return cert
         return None
 
-    def verificacion_certificado(self, cert):
-        cert=x509.load_pem_x509_certificate(cert)
-        firma=cert.signature
+    def gestion_csr(self):
+        lista_request = self.db.consultar_csr()
+        i = 0
+        if lista_request == 0:
+            print("No hay peticiones de creación de certificados todavía")
+        else:
+            asim = self.db.consultar_claves_asim("Sistema")
+            cert = self.verificacion_certificado(asim[0][1], asim[0][1])
+            if cert:
+                for csr in lista_request:
+                    csr_u = self.verificacion_CertificateRequest(csr[0])
+                    if csr_u:
+                        cert = self.crear_cert(csr_u, cert)
+                        self.db.actualizar_cert(cert, csr_u.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
+                        i += 1
+                    self.db.borrar_csr(csr)
+                print("Se han creado "+str(i)+" nuevos certificados")
+            else:
+                print("El certificado de la AC no es válido")
+
+
+    def verificacion_certificado(self, cert, cert_user):
+        cert = x509.load_pem_x509_certificate(cert)
+        cert_user = x509.load_pem_x509_certificate(cert_user)
+        firma = cert_user.signature
         try:
-            cert.public_key().verify(firma,cert.tbs_certificate_bytes,padding.PKCS1v15(),cert.signature_hash_algorithm)
-            time_now =datetime.datetime.now(datetime.timezone.utc)
-            if time_now <cert.not_valid_before or time_now>cert.not_valid_after:
+            cert.public_key().verify(firma, cert_user.tbs_certificate_bytes, padding.PKCS1v15(), cert_user.signature_hash_algorithm)
+            time_now = datetime.datetime.now(datetime.timezone.utc)
+            if time_now < cert.not_valid_before or time_now > cert.not_valid_after:
+                if cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == "Sistema":
+                    asim_keys = self.db.consultar_claves_asim("Sistema")
+                    kv = self.cargar_kv(asim_keys[0][2])
+                    auto_cert = self.db.certificado_propio("Sistema", kv)
+                    self.db.actualizar_cert(auto_cert, "Sistema")
+                print("Certificado caducado, se ha registrado una nueva petición de certificado")
                 return False
-            return cert
+            return cert_user
+        except InvalidSignature:
+            print("Certificado no válido")
+            return False
+
+    def verificacion_CertificateRequest(self, csr):
+        csr = x509.load_pem_x509_csr(csr)
+        firma = csr.signature
+        try:
+            csr.public_key().verify(firma, csr.tbs_certrequest_bytes, padding.PKCS1v15(), csr.signature_hash_algorithm)
+            return csr
         except InvalidSignature:
             return False
 
