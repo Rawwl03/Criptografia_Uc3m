@@ -770,10 +770,10 @@ class Terminal:
 
     def menu_sistema(self, user_accedido):
         global contrasena_user
-        print("Selecciona la acción de gestión de sistema que desea realizar")
         if user_accedido == "Sistema":
-            self.gestion_csr()
             contrasena_user = self.db.contrasena_sys
+            self.gestion_csr()
+            print("Selecciona la acción de gestión de sistema que desea realizar")
             while True:
                 accion = input("Usuarios || Peticiones || Entradas || EXIT\n")
                 if accion.lower() == "usuarios":
@@ -788,6 +788,7 @@ class Terminal:
                 else:
                     print("Escriba una acción válida")
         else:
+            print("Selecciona la acción de gestión de sistema que desea realizar")
             while True:
                 accion = input("Usuarios || Peticiones || EXIT\n")
                 if accion.lower() == "usuarios":
@@ -988,12 +989,13 @@ class Terminal:
                             data = pet_selec[1] + pet_selec[2].decode('utf-8') + pet_selec[3]
                         else:
                             data = pet_selec[1] + pet_selec[3]
-                        if self.verificacion_firma(data, pet_selec[4], pet_selec[3], user_accedido):
+                        valido = self.verificacion_firma(data, pet_selec[4], pet_selec[3], user_accedido)
+                        if valido == True:
                             decision_Tomada = False
                             while not decision_Tomada:
                                 conf = input("¿Que desea hacer con la petición? ACEPTAR || RECHAZAR\n")
                                 if conf.lower() == "aceptar":
-                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Aceptado"]
+                                    peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Aceptado", None]
                                     peticion_conf[0] = len(peticiones_confirmadas) + 1
                                     if peticion_conf[1] == "Compra":
                                         datos_entrada = json.loads(base64.b64decode(peticion_conf[2]).decode('utf-8'))
@@ -1002,7 +1004,7 @@ class Terminal:
                                                                    datos_entrada["asiento"], pet_selec[3])
                                         firma_entrada = self.firmar_datos(entrada_aprobada.__str__(), user_accedido)
                                         peticion_conf[4] = firma_entrada
-                                        peticion_conf.append(user_accedido)
+                                        peticion_conf[6] = user_accedido
                                     self.db.anadir_peticion_confirmada(peticion_conf)
                                     self.db.borrar_peticion(pet_selec[0])
                                     self.recolocar_peticiones()
@@ -1019,7 +1021,7 @@ class Terminal:
                                     return True
                                 else:
                                     print("No has tomado una decisión válida")
-                        else:
+                        elif valido == False:
                             print("Esta petición no esta verificada, se procederá e eliminarse")
                             peticion_conf = [pet_selec[0], pet_selec[1], pet_selec[2], pet_selec[3], None, "Rechazado", None]
                             peticion_conf[0] = len(peticiones_confirmadas) + 1
@@ -1029,6 +1031,8 @@ class Terminal:
                             self.recolocar_peticiones()
                             print("La petición ha sido borrada con éxito")
                             return False
+                        else:
+                            print("El certificado del user que hice la petición no es válido")
                     else:
                         print("El numero introducido está fuera de rango, escribe de nuevo un número entre el 1 y el "+str(len(peticiones)+1)+" según la petición que quieras gestionar")
                 except ValueError:
@@ -1067,7 +1071,7 @@ class Terminal:
                                 if user[0][4] < 8:
                                     print("La tarjeta con la que se iba a hacer el pago ya no existe, se ha rechazado la compra de la entrada")
                                 else:
-                                    dec = input("La tarjeta con la que se iba a hacer el pago ya no existe, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes "+user[0][4]+"€)\n")
+                                    dec = input("La tarjeta con la que se iba a hacer el pago ya no existe, ¿desea pagar con el saldo de tu cuenta? SI || NO (tienes "+str(user[0][4])+"€)\n")
                                     dec_correcto = False
                                     while not dec_correcto:
                                         if dec.lower() == "si":
@@ -1275,10 +1279,8 @@ class Terminal:
         pem = private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=cifrador)
         with open(ruta_pem, "wb") as archivo:
             archivo.write(pem)
-        public_key = private_key.public_key()
-        pem_u = public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
         self.crear_csr(user_accedido, private_key)
-        datos = [user_accedido, pem_u, ruta_pem]
+        datos = [user_accedido, None, ruta_pem]
         self.db.anadir_claves_asim(datos)
 
     def acceso_biom(self):
@@ -1345,7 +1347,7 @@ class Terminal:
     def verificacion_firma(self, datos, firma_bin, user_firmante, user_accedido):
         asim_keys = self.db.consultar_claves_asim(user_firmante)
         asim_keys_sys = self.db.consultar_claves_asim("Sistema")
-        cert = self.verificacion_certificado(asim_keys_sys[0][1], asim_keys[0][1])
+        cert = self.verificacion_certificado(asim_keys_sys[0][1], asim_keys[0][1], user_accedido)
         if cert:
             ku = cert.public_key()
             firma = base64.b64decode(firma_bin)
@@ -1359,7 +1361,7 @@ class Terminal:
                 self.db.anadir_log_firma(datos_log)
                 return False
         else:
-            return False
+            return None
 
     def crear_csr(self, user_accedido, kv):
         csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
@@ -1367,7 +1369,7 @@ class Terminal:
         csr_codificado = csr.public_bytes(serialization.Encoding.PEM)
         self.db.anadir_csr(csr_codificado)
 
-    def crear_cert(self, csr, cert, valid_days=90):
+    def crear_cert(self, csr, cert):
         priv_key_sys = self.db.consultar_claves_asim(cert.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
         kv = self.cargar_kv(priv_key_sys[0][2])
         if csr:
@@ -1378,9 +1380,10 @@ class Terminal:
             cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(
                 csr.public_key()).serial_number(
                 x509.random_serial_number()).not_valid_before(
-                datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
-                datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(valid_days)).sign(kv, hashes.SHA256())
-            return cert
+                datetime.datetime.now()).not_valid_after(
+                datetime.datetime.now() + datetime.timedelta(days=90)).sign(kv, hashes.SHA256())
+            cert_pem = cert.public_bytes(encoding=serialization.Encoding.PEM)
+            return cert_pem
         return None
 
     def gestion_csr(self):
@@ -1390,7 +1393,7 @@ class Terminal:
             print("No hay peticiones de creación de certificados todavía")
         else:
             asim = self.db.consultar_claves_asim("Sistema")
-            cert = self.verificacion_certificado(asim[0][1], asim[0][1])
+            cert = self.verificacion_certificado(asim[0][1], asim[0][1], user_accedido="Sistema")
             if cert:
                 for csr in lista_request:
                     csr_u = self.verificacion_CertificateRequest(csr[0])
@@ -1398,32 +1401,36 @@ class Terminal:
                         cert = self.crear_cert(csr_u, cert)
                         self.db.actualizar_cert(cert, csr_u.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
                         i += 1
-                    self.db.borrar_csr(csr)
+                    self.db.borrar_csr(csr[0])
                 print("Se han creado "+str(i)+" nuevos certificados")
             else:
                 print("El certificado de la AC no es válido")
 
 
-    def verificacion_certificado(self, cert, cert_user):
+    def verificacion_certificado(self, cert, cert_user, user_accedido):
         cert = x509.load_pem_x509_certificate(cert)
-        cert_user = x509.load_pem_x509_certificate(cert_user)
-        firma = cert_user.signature
-        try:
-            cert.public_key().verify(firma, cert_user.tbs_certificate_bytes, padding.PKCS1v15(), cert_user.signature_hash_algorithm)
-            time_now = datetime.datetime.now(datetime.timezone.utc)
-            if time_now < cert_user.not_valid_before or time_now > cert_user.not_valid_after:
-                if cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == "Sistema":
-                    asim_keys = self.db.consultar_claves_asim("Sistema")
-                    kv = self.cargar_kv(asim_keys[0][2])
-                    auto_cert = self.db.certificado_propio("Sistema", kv)
-                    self.db.actualizar_cert(auto_cert, "Sistema")
-                else:
-                    self.db.actualizar_cert(None, cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
-                print("Certificado caducado, se ha registrado una nueva petición de certificado")
+        if cert_user:
+            cert_user = x509.load_pem_x509_certificate(cert_user)
+            firma = cert_user.signature
+            try:
+                cert.public_key().verify(firma, cert_user.tbs_certificate_bytes, padding.PKCS1v15(), cert_user.signature_hash_algorithm)
+                time_now = datetime.datetime.now()
+                if time_now < cert_user.not_valid_before or time_now > cert_user.not_valid_after:
+                    if cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == "Sistema":
+                        asim_keys = self.db.consultar_claves_asim("Sistema")
+                        kv = self.cargar_kv(asim_keys[0][2])
+                        auto_cert = self.db.certificado_propio("Sistema", kv)
+                        self.db.actualizar_cert(auto_cert, "Sistema")
+                    else:
+                        self.db.actualizar_cert(None, cert_user.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
+                    print("Certificado caducado, se ha registrado una nueva petición de certificado")
+                    return False
+                return cert_user
+            except InvalidSignature:
+                print("Certificado no válido")
                 return False
-            return cert_user
-        except InvalidSignature:
-            print("Certificado no válido")
+        else:
+            self.consultar_certificado(user_accedido)
             return False
 
     def verificacion_CertificateRequest(self, csr):
@@ -1440,7 +1447,8 @@ class Terminal:
         csr_list = self.db.consultar_csr()
         found = False
         for csr in csr_list:
-            if csr[0].subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == user_accedido:
+            csr_cod = x509.load_pem_x509_csr(csr[0])
+            if csr_cod.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value == user_accedido:
                 found = True
         if asim_keys[0][1] == None and not found:
             kv = self.cargar_kv(asim_keys[0][2])

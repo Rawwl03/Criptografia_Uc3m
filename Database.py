@@ -19,7 +19,7 @@ class Database:
         self.base = sqlite3.connect("BaseDatos.db")
         self.puntero = self.base.cursor()
         self.contrasena_sys = "Sistema!01!Key"
-        self.generar_base()
+        #self.generar_base()
 
     """Método para la generación de la db. Contiene creación de tablas y generación de elementos como películas, horario, salas, filas y asientos."""
     def generar_base(self):
@@ -75,6 +75,7 @@ class Database:
         self.puntero.execute(creacion_base_peticiones)
         self.puntero.execute(creacion_base_peticiones_terminadas)
         self.puntero.execute(creacion_base_cargos)
+        self.puntero.execute(creacion_base_csr)
 
         self.generar_asientos()
         self.generar_cartelera()
@@ -133,7 +134,7 @@ class Database:
         self.base.commit()
 
     def anadir_claves_asim(self, datos):
-        query = "INSERT INTO ASYMETHRIC_KEYS (Usuario, PUBLIC_KEY, PRIVATE_KEY_ROUTE) VALUES (?,?,?)"
+        query = "INSERT INTO ASYMETHRIC_KEYS (Usuario, CERTIFICATE, PRIVATE_KEY_ROUTE) VALUES (?,?,?)"
         self.puntero.execute(query, (datos[0], datos[1], datos[2]))
         self.base.commit()
 
@@ -162,7 +163,7 @@ class Database:
         self.base.commit()
 
     def anadir_csr(self, csr):
-        query = "INSERT INTO CSR(Csr) VALUES (?)"
+        query = "INSERT INTO CSR(CSR) VALUES (?)"
         self.puntero.execute(query, (csr,))
         self.base.commit()
 
@@ -404,7 +405,7 @@ class Database:
 
     """Método que devuelve la fecha y hora actual en el formato deseado"""
     def hora_fecha_actual(self):
-        t = datetime.now()
+        t = datetime.datetime.now()
         if len(str(t.hour)) == 1:
             if len(str(t.minute)) == 1:
                 hora_str = "0"+str(t.hour)+":0"+str(t.minute)
@@ -497,7 +498,7 @@ class Database:
         self.base.commit()
 
     def actualizar_cert(self, cert, user):
-        query = "UPDATE ASYMETHRIC_KEYS SET CERT = ? WHERE Username = ?"
+        query = "UPDATE ASYMETHRIC_KEYS SET CERTIFICATE = ? WHERE Usuario = ?"
         self.puntero.execute(query, (cert, user))
         self.base.commit()
 
@@ -522,8 +523,8 @@ class Database:
         cert = x509.CertificateBuilder().subject_name(subject).issuer_name(issuer).public_key(
             kv.public_key()).serial_number(
             x509.random_serial_number()).not_valid_before(
-            datetime.datetime.now(datetime.timezone.utc)).not_valid_after(
-            datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).sign(kv, hashes.SHA256())
+            datetime.datetime.now()).not_valid_after(
+            datetime.datetime.now() + datetime.timedelta(days=30)).sign(kv, hashes.SHA256())
         cert_codificado = cert.public_bytes(serialization.Encoding.PEM)
         return cert_codificado
 
